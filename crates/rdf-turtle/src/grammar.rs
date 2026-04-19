@@ -31,6 +31,24 @@ pub(crate) enum Dialect {
     TriG,
 }
 
+/// Syntactic category of a parsed subject. Drives the Turtle §2.5
+/// `triples ::= blankNodePropertyList predicateObjectList?` branch
+/// (predicateObjectList is optional iff subject was a property-list
+/// bnode or a collection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubjectKind {
+    /// `<iri>` or `pname` — predicateObjectList required.
+    Iri,
+    /// `_:label` — predicateObjectList required.
+    BNode,
+    /// `[ p o ]` or `[]` — predicateObjectList optional.
+    BlankNodePropertyList,
+    /// `( … )` — predicateObjectList optional (§2.5.1 collections).
+    Collection,
+    /// Literal (only reachable via `parse_object`; never a subject).
+    Literal,
+}
+
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
@@ -84,7 +102,12 @@ impl<'a> Parser<'a> {
                 Tok::DirBase => self.directive_base(false)?,
                 Tok::SparqlPrefix => self.directive_prefix(true)?,
                 Tok::SparqlBase => self.directive_base(true)?,
-                Tok::LBrace | Tok::IriRef(_) | Tok::Pname { .. } | Tok::KwGraph
+                Tok::LBrace
+            | Tok::IriRef(_)
+            | Tok::Pname { .. }
+            | Tok::BNodeLabel(_)
+            | Tok::LBracket
+            | Tok::KwGraph
                     if self.dialect == Dialect::TriG && self.looks_like_graph_block(&peek)? =>
                 {
                     self.trig_graph_block()?;
@@ -116,8 +139,12 @@ impl<'a> Parser<'a> {
         };
         self.prefixes.insert(prefix_name, iri);
         if sparql_style {
-            // SPARQL-style PREFIX has no dot terminator per §2.3, but we
-            // accept an optional `.` to match oxttl / tolerant corpora.
+            // SPARQL-style `PREFIX` has no `.` terminator per Turtle §6.4
+            // (production `sparqlPrefix`). We accept a stray `.` for
+            // backward compatibility with the `adversary-ttl/fm6-…`
+            // fixture corpus (authored before the strict reading). The
+            // divergence surface is covered by allow-list entries for
+            // W3C `turtle-syntax-bad-prefix-05` / `trig-syntax-bad-prefix-05`.
             self.consume_if_dot();
         } else {
             self.expect_dot(kw.start)?;
@@ -137,7 +164,8 @@ impl<'a> Parser<'a> {
         };
         self.base = Some(iri);
         if sparql_style {
-            // See `directive_prefix` — tolerant trailing dot.
+            // See `directive_prefix` — tolerant of a stray `.`. Covered
+            // by allow-list for W3C `turtle-syntax-bad-base-03`.
             self.consume_if_dot();
         } else {
             self.expect_dot(kw.start)?;
@@ -175,14 +203,28 @@ impl<'a> Parser<'a> {
     // -- TriG graph blocks ----------------------------------------------
 
     /// Return `true` if the lookahead starts a TriG graph block. This is
-    /// true when we see `{ … }` (default graph block) or `IRIREF/pname {`
-    /// or `GRAPH <iri> { … }`.
+    /// true when we see `{ … }` (default graph block), `GRAPH <iri> { … }`,
+    /// or any term (IRIREF / pname / bnode label / `[]` anon-bnode)
+    /// followed by `{`.
     fn looks_like_graph_block(&mut self, peek: &Spanned) -> Result<bool, Diag> {
         if matches!(peek.tok, Tok::LBrace | Tok::KwGraph) {
             return Ok(true);
         }
         let save = self.lex.offset();
-        let _first = self.lex.next()?;
+        let first = self.lex.next()?;
+        // Special case: `[` as graph name is only legal as empty `[]`
+        // (anonymous bnode). If the `[` is not immediately followed by `]`
+        // we are looking at a `[ p o ] …` triples subject, not a graph
+        // block.
+        if matches!(first.as_ref().map(|s| &s.tok), Some(Tok::LBracket)) {
+            let second = self.lex.next()?;
+            let third = self.lex.next()?;
+            self.lex.seek(save);
+            return Ok(
+                matches!(second.map(|s| s.tok), Some(Tok::RBracket))
+                    && matches!(third.map(|s| s.tok), Some(Tok::LBrace)),
+            );
+        }
         let second = self.lex.next()?;
         self.lex.seek(save);
         Ok(matches!(second.map(|s| s.tok), Some(Tok::LBrace)))
@@ -197,7 +239,20 @@ impl<'a> Parser<'a> {
             Tok::LBrace => (None, first.start),
             Tok::KwGraph => {
                 let name = self.lex.next()?.ok_or_else(|| eof("GRAPH <iri>"))?;
-                let g = self.subject_iri_from_tok(&name)?;
+                let g = match name.tok {
+                    Tok::LBracket => {
+                        // `GRAPH [] { … }` — anonymous bnode graph name.
+                        let close = self.lex.next()?.ok_or_else(|| eof("']'"))?;
+                        if !matches!(close.tok, Tok::RBracket) {
+                            return Err(syntax(
+                                close.start,
+                                "graph-name blank node must be empty `[]`",
+                            ));
+                        }
+                        self.fresh_bnode()
+                    }
+                    _ => self.graph_name_from_tok(&name)?,
+                };
                 let brace = self.lex.next()?.ok_or_else(|| eof("'{' after GRAPH iri"))?;
                 if !matches!(brace.tok, Tok::LBrace) {
                     return Err(syntax(brace.start, "expected '{' after GRAPH <iri>"));
@@ -219,6 +274,32 @@ impl<'a> Parser<'a> {
                     return Err(syntax(brace.start, "expected '{' after graph name"));
                 }
                 (Some(format!("<{g}>")), brace.start)
+            }
+            Tok::BNodeLabel(label) => {
+                // TriG §2.6: a graph name may be a blank-node label.
+                let g = self.bnode_for_label(&label);
+                let brace = self.lex.next()?.ok_or_else(|| eof("'{' after graph name"))?;
+                if !matches!(brace.tok, Tok::LBrace) {
+                    return Err(syntax(brace.start, "expected '{' after graph name"));
+                }
+                (Some(g), brace.start)
+            }
+            Tok::LBracket => {
+                // Anonymous bnode as graph name — must be the empty form
+                // `[]`; nonempty `[ p o ]` as a graph name isn't legal.
+                let close = self.lex.next()?.ok_or_else(|| eof("']'"))?;
+                if !matches!(close.tok, Tok::RBracket) {
+                    return Err(syntax(
+                        close.start,
+                        "graph-name blank node must be empty `[]`",
+                    ));
+                }
+                let g = self.fresh_bnode();
+                let brace = self.lex.next()?.ok_or_else(|| eof("'{' after graph name"))?;
+                if !matches!(brace.tok, Tok::LBrace) {
+                    return Err(syntax(brace.start, "expected '{' after graph name"));
+                }
+                (Some(g), brace.start)
             }
             _ => return Err(syntax(first.start, "expected '{' or graph name")),
         };
@@ -242,8 +323,13 @@ impl<'a> Parser<'a> {
                 return Ok(());
             }
             // Inside a graph block, statements are triples (no directives
-            // per §2.2).
-            self.parse_triple_stmt(graph)?;
+            // per §2.2). Per TriG §2.5, the last triple may omit its `.`
+            // immediately before the closing `}`; `parse_triple_stmt_in_block`
+            // consumes the `}` in that case.
+            let saw_rbrace = self.parse_triple_stmt_in_block(graph)?;
+            if saw_rbrace {
+                return Ok(());
+            }
         }
     }
 
@@ -254,13 +340,82 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_triple_stmt(&mut self, graph: Option<&str>) -> Result<(), Diag> {
-        let subject = self.parse_subject(graph)?;
-        self.parse_predicate_object_list(&subject, graph)?;
+        let (subject, subject_kind) = self.parse_subject(graph)?;
+        // Turtle §2.5 grammar:
+        //   triples ::= subject predicateObjectList
+        //             | blankNodePropertyList predicateObjectList?
+        // i.e. when the subject is a blankNodePropertyList or an empty
+        // `[]`, the predicateObjectList is optional (the bnode stands on
+        // its own, carrying whatever predicates were declared inside the
+        // brackets).
+        // Turtle §2.5 only makes predicateObjectList optional after a
+        // blankNodePropertyList subject. A bare collection subject must
+        // still be followed by a predicateObjectList (W3C
+        // `trig-syntax-bad-list-0{1..4}` tests pin this as negative
+        // syntax).
+        let pol_optional = matches!(subject_kind, SubjectKind::BlankNodePropertyList);
+        if pol_optional {
+            // Peek — if the next token isn't a verb-ish start, don't
+            // consume it. The caller will re-inspect it as the statement
+            // terminator (`.` / `}` / EOF).
+            let peek = self.lex.peek()?;
+            let has_verb = matches!(
+                peek.as_ref().map(|s| &s.tok),
+                Some(Tok::KwA | Tok::IriRef(_) | Tok::Pname { .. })
+            );
+            if has_verb {
+                self.parse_predicate_object_list(&subject, graph)?;
+            }
+        } else {
+            self.parse_predicate_object_list(&subject, graph)?;
+        }
+        // Statement terminator. Inside a TriG graph block the last triple
+        // may omit the trailing dot (TriG §2.5) — the caller handles the
+        // `}` case via `consume_triple_terminator_in_block`. At the outer
+        // document level, `.` is mandatory.
         let next = self.lex.next()?.ok_or_else(|| eof("'.' after triple"))?;
         if !matches!(next.tok, Tok::Dot) {
             return Err(syntax(next.start, "expected '.' after triple statement"));
         }
         Ok(())
+    }
+
+    /// Variant of `parse_triple_stmt` used inside a TriG graph block,
+    /// where the *last* triple may omit the trailing `.` before `}`
+    /// (TriG §2.5). Returns `true` if it consumed the terminating `}`.
+    fn parse_triple_stmt_in_block(&mut self, graph: Option<&str>) -> Result<bool, Diag> {
+        let (subject, subject_kind) = self.parse_subject(graph)?;
+        // Turtle §2.5 only makes predicateObjectList optional after a
+        // blankNodePropertyList subject. A bare collection subject must
+        // still be followed by a predicateObjectList (W3C
+        // `trig-syntax-bad-list-0{1..4}` tests pin this as negative
+        // syntax).
+        let pol_optional = matches!(subject_kind, SubjectKind::BlankNodePropertyList);
+        if pol_optional {
+            let peek = self.lex.peek()?;
+            let has_verb = matches!(
+                peek.as_ref().map(|s| &s.tok),
+                Some(Tok::KwA | Tok::IriRef(_) | Tok::Pname { .. })
+            );
+            if has_verb {
+                self.parse_predicate_object_list(&subject, graph)?;
+            }
+        } else {
+            self.parse_predicate_object_list(&subject, graph)?;
+        }
+        // Accept `.`, or `}` (implicit terminator for last triple).
+        let next = self
+            .lex
+            .next()?
+            .ok_or_else(|| eof("'.' or '}' after triple"))?;
+        match next.tok {
+            Tok::Dot => Ok(false),
+            Tok::RBrace => Ok(true),
+            _ => Err(syntax(
+                next.start,
+                "expected '.' or '}' after triple statement",
+            )),
+        }
     }
 
     fn parse_predicate_object_list(
@@ -338,14 +493,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_subject(&mut self, graph: Option<&str>) -> Result<String, Diag> {
+    fn parse_subject(&mut self, graph: Option<&str>) -> Result<(String, SubjectKind), Diag> {
         let tok = self.lex.next()?.ok_or_else(|| eof("subject"))?;
         self.subject_or_object_from_tok(tok, graph, /*is_subject*/ true)
     }
 
     fn parse_object(&mut self, graph: Option<&str>) -> Result<String, Diag> {
         let tok = self.lex.next()?.ok_or_else(|| eof("object"))?;
-        self.subject_or_object_from_tok(tok, graph, /*is_subject*/ false)
+        let (term, _kind) = self.subject_or_object_from_tok(tok, graph, /*is_subject*/ false)?;
+        Ok(term)
     }
 
     fn subject_or_object_from_tok(
@@ -353,23 +509,26 @@ impl<'a> Parser<'a> {
         tok: Spanned,
         graph: Option<&str>,
         is_subject: bool,
-    ) -> Result<String, Diag> {
+    ) -> Result<(String, SubjectKind), Diag> {
         match tok.tok {
             Tok::IriRef(s) => {
                 let iri = self.resolve_iri(&s, tok.start)?;
-                Ok(format!("<{iri}>"))
+                Ok((format!("<{iri}>"), SubjectKind::Iri))
             }
             Tok::Pname { prefix, local } => {
                 let iri = self.expand_pname(&prefix, &local, tok.start)?;
-                Ok(format!("<{iri}>"))
+                Ok((format!("<{iri}>"), SubjectKind::Iri))
             }
-            Tok::BNodeLabel(label) => Ok(self.bnode_for_label(&label)),
-            Tok::LBracket => self.blank_node_property_list(graph),
-            Tok::LParen => self.collection(graph),
+            Tok::BNodeLabel(label) => Ok((self.bnode_for_label(&label), SubjectKind::BNode)),
+            Tok::LBracket => Ok((
+                self.blank_node_property_list(graph)?,
+                SubjectKind::BlankNodePropertyList,
+            )),
+            Tok::LParen => Ok((self.collection(graph)?, SubjectKind::Collection)),
             Tok::StringLit(_) | Tok::NumberLit { .. } | Tok::KwTrue | Tok::KwFalse
                 if !is_subject =>
             {
-                self.literal_from_tok(tok)
+                Ok((self.literal_from_tok(tok)?, SubjectKind::Literal))
             }
             Tok::StringLit(_) | Tok::NumberLit { .. } | Tok::KwTrue | Tok::KwFalse => {
                 Err(syntax(tok.start, "literal in subject position"))
@@ -378,7 +537,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn subject_iri_from_tok(&mut self, tok: &Spanned) -> Result<String, Diag> {
+    fn graph_name_from_tok(&mut self, tok: &Spanned) -> Result<String, Diag> {
+        // Permissive graph-name reader (iri / pname / bnode). `[]` is
+        // handled in the outer `trig_graph_block` because its opening
+        // bracket arrives in the header position, not after `GRAPH`.
         match &tok.tok {
             Tok::IriRef(s) => {
                 let iri = self.resolve_iri(s, tok.start)?;
@@ -388,7 +550,8 @@ impl<'a> Parser<'a> {
                 let iri = self.expand_pname(prefix, local, tok.start)?;
                 Ok(format!("<{iri}>"))
             }
-            _ => Err(syntax(tok.start, "expected IRI or prefixed name")),
+            Tok::BNodeLabel(label) => Ok(self.bnode_for_label(label)),
+            _ => Err(syntax(tok.start, "expected IRI, prefixed name, or blank node")),
         }
     }
 
@@ -459,33 +622,38 @@ impl<'a> Parser<'a> {
     }
 
     fn collection(&mut self, graph: Option<&str>) -> Result<String, Diag> {
-        // We already consumed '('. Read objects until ')' and emit
-        // first/rest chain.
-        let mut nodes: Vec<String> = Vec::new();
+        // We already consumed '('. Peek for the empty case, otherwise
+        // mint the head bnode *before* parsing items so that nested
+        // collections get bnode labels AFTER the outer head (matching
+        // the canonical emission order used by the W3C eval corpora —
+        // see `turtle-eval-lists-05`).
+        let peek = self.lex.peek()?.ok_or_else(|| eof("')'"))?;
+        if matches!(peek.tok, Tok::RParen) {
+            let _ = self.lex.next()?;
+            return Ok(format!("<{RDF_NIL}>"));
+        }
+        let head = self.fresh_bnode();
+        let mut current = head.clone();
         loop {
+            let item = self.parse_object(graph)?;
+            self.emit(&current, &format!("<{RDF_FIRST}>"), &item, graph, 0);
+            // Peek: if the next token is `)`, emit rest=nil and finish.
+            // Otherwise mint the next cons cell and continue.
             let peek = self.lex.peek()?.ok_or_else(|| eof("')'"))?;
             if matches!(peek.tok, Tok::RParen) {
                 let _ = self.lex.next()?;
+                self.emit(
+                    &current,
+                    &format!("<{RDF_REST}>"),
+                    &format!("<{RDF_NIL}>"),
+                    graph,
+                    0,
+                );
                 break;
             }
-            let item = self.parse_object(graph)?;
-            nodes.push(item);
-        }
-        if nodes.is_empty() {
-            return Ok(format!("<{RDF_NIL}>"));
-        }
-        // Build the cons chain.
-        let head = self.fresh_bnode();
-        let mut current = head.clone();
-        for (i, item) in nodes.iter().enumerate() {
-            self.emit(&current, &format!("<{RDF_FIRST}>"), item, graph, 0);
-            let rest = if i == nodes.len() - 1 {
-                format!("<{RDF_NIL}>")
-            } else {
-                self.fresh_bnode()
-            };
-            self.emit(&current, &format!("<{RDF_REST}>"), &rest, graph, 0);
-            current = rest;
+            let next_cell = self.fresh_bnode();
+            self.emit(&current, &format!("<{RDF_REST}>"), &next_cell, graph, 0);
+            current = next_cell;
         }
         Ok(head)
     }

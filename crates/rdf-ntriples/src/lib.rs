@@ -804,7 +804,13 @@ const fn is_pn_chars_base(c: char) -> bool {
 }
 
 const fn is_pn_chars_u(c: char) -> bool {
-    is_pn_chars_base(c) || c == '_' || c == ':'
+    // N-Triples / N-Quads grammar §2.3:
+    //   PN_CHARS_U ::= PN_CHARS_BASE | '_'
+    // Unlike Turtle, ':' is deliberately **excluded** because N-Triples has
+    // no prefixed-name syntax — a ':' inside a blank-node label is always
+    // a syntax error (see W3C negative tests `nt-syntax-bad-bnode-01` and
+    // `nt-syntax-bad-bnode-02`).
+    is_pn_chars_base(c) || c == '_'
 }
 
 const fn is_pn_chars(c: char) -> bool {
@@ -1042,6 +1048,58 @@ mod tests {
         // And the well-formed baseline still succeeds.
         let ok = parse_nt("_:b1 <http://ex/p> <http://ex/o> .\n").expect("accept");
         assert_eq!(ok.set.len(), 1);
+    }
+
+    // --- Colon in blank-node label (W3C nt-syntax-bad-bnode-01/02) ---
+
+    #[test]
+    fn bnode_label_first_char_colon_rejected() {
+        // W3C negative-syntax test `nt-syntax-bad-bnode-01`:
+        //   _::a  <http://example/p> <http://example/o> .
+        // Manifest comment: "Colon in bnode label not allowed".
+        // In N-Triples, PN_CHARS_U = PN_CHARS_BASE | '_' (no ':'),
+        // so the ':' after the mandatory `_:` prefix is illegal.
+        let err = NTriplesParser
+            .parse(b"_::a <http://example/p> <http://example/o> .\n")
+            .expect_err("reject");
+        assert!(err.fatal);
+        assert!(
+            err.messages[0].starts_with("NT-BN-002"),
+            "expected NT-BN-002, got: {:?}",
+            err.messages
+        );
+    }
+
+    #[test]
+    fn bnode_label_interior_colon_rejected() {
+        // W3C negative-syntax test `nt-syntax-bad-bnode-02`:
+        //   _:abc:def  <http://example/p> <http://example/o> .
+        // The ':' after `abc` is not in PN_CHARS for N-Triples, so the
+        // label ends at `abc` and the parser must then reject the `:` as
+        // an unexpected character before the predicate.
+        let err = NTriplesParser
+            .parse(b"_:abc:def <http://example/p> <http://example/o> .\n")
+            .expect_err("reject");
+        assert!(err.fatal);
+    }
+
+    #[test]
+    fn nquads_bnode_label_first_char_colon_rejected() {
+        // Same fixture as NT but via NQuads (the NQ corpus duplicates the
+        // NT negative tests verbatim).
+        let err = NQuadsParser
+            .parse(b"_::a <http://example/p> <http://example/o> .\n")
+            .expect_err("reject");
+        assert!(err.fatal);
+        assert!(err.messages[0].starts_with("NT-BN-002"));
+    }
+
+    #[test]
+    fn nquads_bnode_label_interior_colon_rejected() {
+        let err = NQuadsParser
+            .parse(b"_:abc:def <http://example/p> <http://example/o> .\n")
+            .expect_err("reject");
+        assert!(err.fatal);
     }
 
     // --- Missing terminator --------------------------------------

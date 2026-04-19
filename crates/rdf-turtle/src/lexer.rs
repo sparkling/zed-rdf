@@ -238,15 +238,29 @@ impl<'a> Lexer<'a> {
         }
         // Prefixed name or keyword (`a`, `true`, `false`, `PREFIX`, `BASE`, `GRAPH`).
         if is_pn_chars_base(b) || b == b':' {
-            let (prefix, local, end) = self.lex_pname(start)?;
-            let tok = match (prefix.as_str(), local.as_str()) {
-                ("a", "") => Tok::KwA,
-                ("true", "") => Tok::KwTrue,
-                ("false", "") => Tok::KwFalse,
-                (p, "") if p.eq_ignore_ascii_case("prefix") => Tok::SparqlPrefix,
-                (p, "") if p.eq_ignore_ascii_case("base") => Tok::SparqlBase,
-                (p, "") if p.eq_ignore_ascii_case("graph") => Tok::KwGraph,
-                _ => Tok::Pname { prefix, local },
+            let (prefix, local, end, had_colon) = self.lex_pname(start)?;
+            // Bare keywords (`a`, `true`, `false`, SPARQL `PREFIX`/`BASE`/
+            // `GRAPH`) must NOT carry a trailing colon. A trailing colon
+            // means the identifier is a pname prefix (possibly with empty
+            // local), NOT a keyword — otherwise `@prefix a: <…>` would be
+            // lexed as `@prefix a <…>` because the colon is silently eaten.
+            let tok = if had_colon {
+                Tok::Pname { prefix, local }
+            } else {
+                match prefix.as_str() {
+                    "a" => Tok::KwA,
+                    "true" => Tok::KwTrue,
+                    "false" => Tok::KwFalse,
+                    p if p.eq_ignore_ascii_case("prefix") => Tok::SparqlPrefix,
+                    p if p.eq_ignore_ascii_case("base") => Tok::SparqlBase,
+                    p if p.eq_ignore_ascii_case("graph") => Tok::KwGraph,
+                    _ => {
+                        return Err(diag_syntax(
+                            start,
+                            "expected prefixed name (identifier must be followed by ':')",
+                        ));
+                    }
+                }
             };
             return Ok(Some(Spanned { tok, start, end }));
         }
@@ -650,7 +664,7 @@ impl<'a> Lexer<'a> {
         Ok((label, self.pos))
     }
 
-    fn lex_pname(&mut self, start: usize) -> Result<(String, String, usize), Diag> {
+    fn lex_pname(&mut self, start: usize) -> Result<(String, String, usize, bool), Diag> {
         // PN_PREFIX ::= PN_CHARS_BASE ((PN_CHARS | '.')* PN_CHARS)?
         let prefix_start = self.pos;
         if self.src[self.pos] != b':' {
@@ -673,12 +687,15 @@ impl<'a> Lexer<'a> {
         }
         let prefix_end = self.pos;
         // Must be followed by ':' for a pname. If there is no ':', this is
-        // a bare keyword-shape (e.g. `a`, `true`).
+        // a bare keyword-shape (e.g. `a`, `true`). The caller uses the
+        // `had_colon` flag to distinguish a bare keyword from an empty-
+        // local pname — those cases are lexically identical up to the
+        // colon but grammatically distinct (e.g. `a` vs `a:`).
         if self.pos >= self.src.len() || self.src[self.pos] != b':' {
             let name = std::str::from_utf8(&self.src[prefix_start..prefix_end])
                 .map_err(|_| diag_syntax(prefix_start, "non-UTF-8 identifier"))?
                 .to_owned();
-            return Ok((name, String::new(), self.pos));
+            return Ok((name, String::new(), self.pos, false));
         }
         let prefix = std::str::from_utf8(&self.src[prefix_start..prefix_end])
             .map_err(|_| diag_syntax(prefix_start, "non-UTF-8 prefix"))?
@@ -747,7 +764,7 @@ impl<'a> Lexer<'a> {
         // If we opened on ':' but produced no local chars, that is fine —
         // the prefix name `ex:` is a valid pname with empty local.
         let _ = local_start;
-        Ok((prefix, local, self.pos))
+        Ok((prefix, local, self.pos, true))
     }
 }
 

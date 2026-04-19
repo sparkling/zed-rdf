@@ -52,3 +52,71 @@ oracle.
 None — the N-Triples suite is fully in Phase A scope (ADR-0018 §4).
 Any divergence surfaced here after the integration pass is a
 parser-correctness bug.
+
+## Triage log (phase-a-triage / pat-ntriples, 2026-04-19)
+
+The `xtask verify` integration pass landed and surfaced two distinct
+divergences against the W3C `rdf-n-triples` suite (each counted twice
+in `diff-report-nt.json` because both the `rdf11` and `rdf12`
+manifests include the same fixture):
+
+### nt-syntax-bad-bnode-01
+
+- **Test-id:** `nt-syntax-bad-bnode-01` (from both `rdf11` and `rdf12`
+  manifests).
+- **Fixture:** `external/tests/nt/nt-syntax-bad-bnode-01.nt` — input
+  `_::a  <http://example/p> <http://example/o> .`.
+- **Kind:** `TestNTriplesNegativeSyntax`. W3C manifest comment:
+  "Colon in bnode label not allowed (negative test)".
+- **Pre-fix report:** `AcceptRejectSplit — expected-reject but
+  accepted`.
+- **Root cause:** `is_pn_chars_u` in `crates/rdf-ntriples/src/lib.rs`
+  treated `:` as a member of `PN_CHARS_U`. That definition is
+  correct for **Turtle** (where prefixed names need it) but wrong
+  for N-Triples / N-Quads — §2.3 of RDF 1.1 N-Triples defines
+  `PN_CHARS_U ::= PN_CHARS_BASE | '_'`. The parser therefore
+  accepted `_::a` because the first post-`_:` character `':'` was
+  wrongly classified as a valid label starter.
+- **Classification:** **Parser bug.**
+- **Action taken:**
+  1. Narrowed `is_pn_chars_u` to `PN_CHARS_BASE | '_'` — commented
+     with the W3C §2.3 citation.
+  2. Added regression tests
+     `tests::bnode_label_first_char_colon_rejected` and
+     `tests::nquads_bnode_label_first_char_colon_rejected`.
+  3. Extended the `blank-node-labels.md` pin with an explicit
+     colon-exclusion sub-clause (NT-BN-002) and a cross-reference to
+     the W3C negative tests.
+- **Status after fix:** `xtask verify` reports zero divergence;
+  the parser now emits `NT-BN-002: illegal first character in
+  blank-node label at byte offset 2`.
+
+### nt-syntax-bad-bnode-02
+
+- **Test-id:** `nt-syntax-bad-bnode-02` (both manifests).
+- **Fixture:** `external/tests/nt/nt-syntax-bad-bnode-02.nt` — input
+  `_:abc:def  <http://example/p> <http://example/o> .`.
+- **Kind:** `TestNTriplesNegativeSyntax`. W3C manifest comment:
+  "Colon in bnode label not allowed (negative test)".
+- **Pre-fix report:** `AcceptRejectSplit — expected-reject but
+  accepted`.
+- **Root cause:** Same root cause as `bad-bnode-01` via the
+  transitive inclusion `is_pn_chars = is_pn_chars_u | …`. The
+  interior `:` was greedily absorbed into the label.
+- **Classification:** **Parser bug (same fix).**
+- **Action taken:** Same single-line change to `is_pn_chars_u` as
+  above. Added regression tests
+  `tests::bnode_label_interior_colon_rejected` and
+  `tests::nquads_bnode_label_interior_colon_rejected`.
+- **Status after fix:** the label lexer now stops at `abc`; the
+  trailing `:def` is then rejected by the statement parser as an
+  unexpected character before the predicate (`NT-STMT-*` family).
+
+### Summary
+
+- Divergences closed: 2 distinct (4 manifest counts).
+- Classification: 2 parser bugs / 0 allow-list entries / 0 new pins
+  authored (existing pin `blank-node-labels.md` clarified).
+- Files touched: `crates/rdf-ntriples/src/lib.rs`,
+  `docs/spec-readings/ntriples/blank-node-labels.md`.
+- Regression tests added: 4 (2 for NT, 2 for NQ).

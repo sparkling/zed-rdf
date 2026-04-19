@@ -35,6 +35,15 @@ Pure grammar reading:
   (input ends at the `:` or transitions to whitespace) is rejected,
   as is a first character from any other set (e.g. `-`, a punctuator,
   or a character from `PN_CHARS_BASE`'s complement).
+- **`NT-BN-002` (colon sub-clause)** — in N-Triples / N-Quads the
+  `PN_CHARS_U` production is `PN_CHARS_BASE | '_'` (no `:`). This
+  differs from Turtle, where `PN_CHARS_U` additionally permits `:`
+  because Turtle has prefixed names. A `:` is therefore rejected both
+  at the first-character position (`_::a` — W3C test
+  `nt-syntax-bad-bnode-01`) and at any middle / trailing position
+  (`_:abc:def` — W3C test `nt-syntax-bad-bnode-02`). The W3C
+  manifest comment is verbatim: "Colon in bnode label not allowed
+  (negative test)".
 
 No ambiguity; the reading is the W3C grammar as-is.
 

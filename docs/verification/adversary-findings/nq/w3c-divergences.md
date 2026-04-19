@@ -27,3 +27,51 @@ Positive / negative syntax only — no eval step.
 ## Deferred
 
 None — N-Quads is in Phase A scope.
+
+## Triage log (phase-a-triage / pat-ntriples, 2026-04-19)
+
+The `xtask verify` integration pass surfaced the N-Triples
+`bad-bnode-01` / `bad-bnode-02` fixtures a second time inside the
+N-Quads corpus (N-Quads vendors the same negative tests verbatim —
+see `external/tests/nq/nt-syntax-bad-bnode-0*.nq`). Each was counted
+twice (`rdf11` + `rdf12` manifests), giving 4 divergence rows in
+`diff-report-nq.json`.
+
+Both share the **same root cause and fix** as the N-Triples triage —
+see `docs/verification/adversary-findings/nt/w3c-divergences.md` for
+the full technical breakdown. Cross-references below.
+
+### nt-syntax-bad-bnode-01 (via NQ corpus)
+
+- **Test-id:** `nt-syntax-bad-bnode-01` (re-run under NQuadsParser).
+- **Fixture:** `external/tests/nq/nt-syntax-bad-bnode-01.nq` — input
+  `_::a  <http://example/p> <http://example/o> .`. Byte-identical to
+  the NT fixture.
+- **Pre-fix report:** `AcceptRejectSplit — expected-reject but
+  accepted`.
+- **Classification:** **Parser bug** (shared with NT — single
+  `is_pn_chars_u` function drives both parsers via `Mode::{NTriples,
+  NQuads}`).
+- **Action taken:** Same fix to `is_pn_chars_u` in
+  `crates/rdf-ntriples/src/lib.rs` closes both NT and NQ cases.
+  Regression test `tests::nquads_bnode_label_first_char_colon_rejected`
+  locks the NQ path in.
+
+### nt-syntax-bad-bnode-02 (via NQ corpus)
+
+- **Test-id:** `nt-syntax-bad-bnode-02` (re-run under NQuadsParser).
+- **Fixture:** `external/tests/nq/nt-syntax-bad-bnode-02.nq` — input
+  `_:abc:def  <http://example/p> <http://example/o> .`.
+- **Pre-fix report:** `AcceptRejectSplit — expected-reject but
+  accepted`.
+- **Classification:** **Parser bug** (shared fix).
+- **Action taken:** Same fix. Regression test
+  `tests::nquads_bnode_label_interior_colon_rejected`.
+
+### Summary
+
+- Divergences closed: 2 distinct (4 manifest counts).
+- Classification: 2 parser bugs (shared with NT) / 0 allow-list / 0
+  new pins.
+- Regression tests added: 2 NQ-specific (plus 2 NT-side — see NT
+  triage doc).
