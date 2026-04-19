@@ -20,7 +20,7 @@ brief into executable fixtures that the diff harness runs.
 
 ## Read first
 
-1. `verification/adversary-findings/nt.md` (the brief).
+1. `docs/verification/adversary-findings/nt.md` (the brief).
 2. `crates/testing/rdf-diff/src/lib.rs` (contract you emit fixtures
    against — **signature only**; do not read tests in
    `crates/testing/rdf-diff/tests/` outside `adversary-nt/`).

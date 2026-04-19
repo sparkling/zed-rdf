@@ -1,0 +1,39 @@
+# xtask `verify` — PR-gate entry point for the verification-v1 sweep.
+#
+# Runs the differential harness across main + all shadow parsers + all
+# enabled oracle JSON corpora and emits one `DiffReport` per format plus a
+# summary under `target/verification-reports/`. Non-zero exit on any
+# non-allow-listed divergence.
+#
+# Binary target name is `xtask` so the project convention
+# `cargo run -p xtask -- verify` resolves cleanly (ADR-0020 §Acceptance).
+#
+# Claim (ADR-0020 §3): `xtask/verify/**`. Coordinated `Cargo.toml`
+# workspace-member addition with other member-adding agents.
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "xtask entry point for the verification-v1 PR gate (ADR-0020 §Acceptance)."
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Deliberately empty: xtask runs in stdlib-only mode during the v1
+# sweep bootstrap so it cannot be blocked by a sibling agent's in-
+# flight edits to `rdf-diff`'s manifest (frozen trait surface is a
+# source-level contract, not a dependency edge). The harness-wiring
+# agent (`v1-diff-core`) hooks the real diff in during ADR-0020 §5's
+# integration pass, at which point this section gains a path-dep on
+# `rdf-diff` and `rdf-diff-oracles`. Keeping this empty is also a
+# belt-and-braces guard against any banned parser crate (oxttl,
+# sophia_*, …) reaching xtask's graph — ADR-0019 §1.

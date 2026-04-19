@@ -1,9 +1,31 @@
-# cargo-deny configuration enforcing ADR-0004 (third-party crate policy)
-# and parts of ADR-0001 (licensing).
+# cargo-deny configuration enforcing ADR-0004 (third-party crate policy),
+# as amended by ADR-0019 §1 (the `[dev-dependencies]`-only oracle
+# carve-out), and parts of ADR-0001 (licensing).
+#
+# The ban list below identifies every RDF/SPARQL parser or triplestore
+# crate that is forbidden in runtime dependency edges. Per ADR-0019 §1
+# a curated subset (`oxttl`, `oxrdfxml`, `oxjsonld`, `oxsparql-syntax`,
+# `sophia_*`) is permitted as `[dev-dependencies]` only, because the
+# differential harness in `crates/testing/rdf-diff/` needs them as
+# reference oracles. `[graph].exclude-dev = true` below is how we
+# mechanise that carve-out: `cargo deny check` only inspects the runtime
+# (non-dev, non-build) dependency closure, so dev-only oracle usage is
+# allowed while any runtime edge into a banned crate fails the build.
+#
+# A second layer of enforcement lives in
+# `crates/testing/deny-regression/` which walks `cargo metadata` itself
+# and refuses to allow any banned crate into the resolved normal
+# dependency closure of a non-test library or binary target. See
+# ADR-0019 §1 "Validation" for the rationale.
 
 [graph]
 all-features = false
 no-default-features = false
+# ADR-0019 §1 carve-out: dev-dependencies (and build-dependencies) are
+# excluded from cargo-deny's view so the differential harness can pull
+# in `oxttl`/`sophia_*` as oracles without tripping the ban list. The
+# `deny-regression` crate provides the belt-and-braces runtime check.
+exclude-dev = true
 
 [output]
 feature-depth = 1
@@ -30,29 +52,32 @@ confidence-threshold = 0.92
 multiple-versions = "warn"
 wildcards = "deny"
 
-# Per ADR-0004, we do not depend on any other RDF/SPARQL parser or
-# triplestore crate. Adding any of these indicates a violation of
-# "no forking".
+# Per ADR-0004 (as amended by ADR-0019 §1) we do not depend on any other
+# RDF/SPARQL parser or triplestore crate at runtime. `exclude-dev` above
+# means this list fires only when the offending crate appears in a
+# normal / build edge.
 deny = [
-    { name = "oxrdf" },
-    { name = "oxttl" },
-    { name = "oxrdfio" },
-    { name = "oxsparql-syntax" },
-    { name = "oxigraph" },
-    { name = "oxjsonld" },
-    { name = "oxrdfxml" },
-    { name = "sophia" },
-    { name = "sophia_api" },
-    { name = "sophia_iri" },
-    { name = "sophia_turtle" },
-    { name = "sophia_xml" },
-    { name = "sophia_jsonld" },
-    { name = "rio_turtle" },
-    { name = "rio_xml" },
-    { name = "rio_api" },
-    { name = "rdftk_core" },
-    { name = "rdftk_io" },
-    { name = "horned-owl" },
+    { name = "oxrdf", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "oxttl", reason = "ADR-0019 §1: oxttl permitted as [dev-dependencies] oracle only." },
+    { name = "oxrdfio", reason = "ADR-0004: oxigraph I/O belongs in dev-only oracle usage." },
+    { name = "oxsparql-syntax", reason = "ADR-0019 §1: permitted as [dev-dependencies] oracle only." },
+    { name = "oxigraph", reason = "ADR-0004: no third-party triplestore at runtime." },
+    { name = "oxjsonld", reason = "ADR-0019 §1: permitted as [dev-dependencies] oracle only." },
+    { name = "oxrdfxml", reason = "ADR-0019 §1: permitted as [dev-dependencies] oracle only." },
+    { name = "sophia", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_api", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_iri", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_inmem", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_term", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_turtle", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_xml", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "sophia_jsonld", reason = "ADR-0019 §1: sophia_* permitted as [dev-dependencies] oracle only." },
+    { name = "rio_turtle", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "rio_xml", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "rio_api", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "rdftk_core", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "rdftk_io", reason = "ADR-0004: no third-party RDF parser at runtime." },
+    { name = "horned-owl", reason = "ADR-0004: no third-party OWL parser at runtime." },
 ]
 
 [advisories]

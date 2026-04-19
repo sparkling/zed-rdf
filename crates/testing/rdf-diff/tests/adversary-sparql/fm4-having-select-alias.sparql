@@ -1,0 +1,23 @@
+# Fixture: fm4-having-select-alias
+# Finding: Failure Mode 4 — HAVING references SELECT aggregate alias
+# Spec: SPARQL 1.1 §11.4, §11.4.2 (aggregate scope in HAVING)
+# Errata: SE-3; public-sparql-dev "GROUP BY with expressions" (2013)
+#
+# Hypothesis: ?cnt is an alias for COUNT(?o) defined in the SELECT clause.
+# SPARQL §11.4.2 allows HAVING to reference aggregate aliases from SELECT.
+# An implementation that evaluates HAVING before projecting SELECT aliases
+# will fail to resolve ?cnt, either producing a type error or treating it
+# as unbound, causing wrong results.
+#
+# Divergence: HAVING evaluated before SELECT projection cannot see ?cnt;
+# the HAVING clause is silently ignored or errors. Correct: HAVING sees
+# the projected aggregate alias.
+# Grammar-level behaviour: parses successfully.
+
+SELECT (COUNT(?o) AS ?cnt) (SUM(?v) AS ?total)
+WHERE {
+  ?s <http://example/p> ?o ;
+     <http://example/q> ?v .
+}
+GROUP BY ?s
+HAVING (?cnt > 2)

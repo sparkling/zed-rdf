@@ -1,0 +1,21 @@
+# Fixture: fm7-filter-not-exists-vs-optional-rewrite
+# Finding: Failure Mode 7 — FILTER NOT EXISTS is not equivalent to OPTIONAL/FILTER(!BOUND)
+# Spec: SPARQL 1.1 §12.5 (FILTER NOT EXISTS formal semantics)
+#
+# Hypothesis: When the NOT EXISTS pattern shares ALL variables with the outer
+# pattern, the OPTIONAL/FILTER(!BOUND(?x)) rewrite produces different semantics.
+# FILTER NOT EXISTS { ?s ?p ?o } in the context of ?s ?p ?o . must return
+# nothing (every solution has a matching triple, so NOT EXISTS is always false).
+# The rewritten form OPTIONAL { ?s ?p ?o } FILTER (!BOUND(?o)) behaves
+# differently because ?o was already bound before the OPTIONAL — the OPTIONAL
+# never unbinds it.
+#
+# Divergence: Optimiser that rewrites FILTER NOT EXISTS as OPTIONAL/FILTER(!BOUND)
+# returns results where the correct answer is empty, when inner and outer
+# patterns share all variables.
+# Grammar-level behaviour: parses successfully.
+
+SELECT * WHERE {
+  ?s ?p ?o .
+  FILTER NOT EXISTS { ?s ?p ?o . }
+}

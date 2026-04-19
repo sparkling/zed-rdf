@@ -1,0 +1,33 @@
+# Fixture IRI-005: authority-less absolute IRIs (urn:, tag:, data:)
+#
+# RFC 3986 §3 defines an absolute URI as scheme ":" hier-part [ "?" query ].
+# An authority (`//host`) is optional.  The following schemes are absolute
+# WITHOUT an authority component: urn:, tag:, isbn:, doi:, data:, etc.
+#
+# N-Triples (and Turtle) require absolute IRIs in subject, predicate, and
+# object position.  The absoluteness test is:  does the IRI have a scheme?
+# NOT: does the IRI contain `://`?
+#
+# Hypothesis: An implementation that tests absoluteness with a regex like
+# `^https?://` or a check for the literal substring `://` will reject
+# valid `urn:` and `tag:` IRIs as non-absolute, raising a fatal parse
+# error on conformant input.
+#
+# Spec: RFC 3986 §3 (URI syntax components)
+#       RFC 2141 (URN syntax)
+#       W3C RDF Concepts §3.1 (absolute IRI definition)
+
+# urn: scheme — no authority, opaque path
+<urn:example:a-resource> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <urn:example:Class> .
+
+# urn: ISBN
+<urn:isbn:0451450523> <http://schema.org/name> "The Name of the Rose" .
+
+# urn: with fragment
+<urn:example:foo#bar> <http://example.org/pred/ref> <urn:example:foo> .
+
+# tag: scheme (RFC 4151) — authority-like but not an HTTP authority
+<tag:example.org,2024:resource-1> <http://example.org/pred/label> "tagged-resource" .
+
+# data: URI (RFC 2397) — no host
+<data:,hello> <http://example.org/pred/content> "inline-data" .

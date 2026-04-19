@@ -1,0 +1,23 @@
+# Fixture: fm10-service-nesting
+# Finding: SERVICE nesting — federated query inside outer SERVICE
+# Spec: SPARQL 1.1 Federated Query §4 (SERVICE evaluation)
+#
+# Hypothesis: A SERVICE pattern may legally appear nested inside another
+# SERVICE block. Parsers that forbid SERVICE nesting at the grammar level
+# will reject this as a parse error; those that allow unlimited nesting
+# accept it. The outer/inner IRI binding and variable scoping must both
+# be preserved. This surfaces both accept/reject splits (FM category) and
+# variable-scoping disagreements in implementations that do accept it.
+#
+# Divergence: Grammar-level accept/reject split on nested SERVICE.
+# Some parsers reject on depth limit; correct grammar has no such limit.
+# Grammar-level behaviour: should parse successfully per spec.
+
+SELECT * WHERE {
+  SERVICE <http://endpoint.example/outer> {
+    ?s <http://example/p> ?o .
+    SERVICE <http://endpoint.example/inner> {
+      ?o <http://example/q> ?z .
+    }
+  }
+}

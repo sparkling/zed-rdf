@@ -1,0 +1,10 @@
+# Adversary fixture: FM3-b — Unicode escape with lowercase hex digits
+# Hypothesis: \u00e9 must produce the same literal as \u00E9.
+#   A parser normalising only to uppercase during comparison or storing
+#   the raw escape will diverge against a parser that decodes to code point.
+# Expected outcome: accept, literal value = é (U+00E9)
+outcome: accept
+fact-count: 1
+object-value: "\u00e9" decoded to U+00E9 (é)
+divergence-hypothesis: ObjectMismatch — case-normalisation mismatch between parsers
+spec-ref: W3C RDF 1.1 N-Triples §2.3 UCHAR + HEX productions (case-insensitive)

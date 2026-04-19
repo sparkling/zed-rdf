@@ -1,0 +1,9 @@
+# Adversary fixture: FM7 — trailing comment with no final newline
+# Hypothesis: NT grammar production ntriplesDoc has a final EOL? (optional).
+#   A parser implementing "read a line, parse it" will fail when the last
+#   line has no newline; a parser reading until EOF must accept this file.
+# Expected outcome: accept-with-1-fact
+outcome: accept
+fact-count: 1
+divergence-hypothesis: AcceptRejectSplit — line-oriented parsers reject no-final-newline
+spec-ref: W3C RDF 1.1 N-Triples §2 ntriplesDoc production (final EOL?)

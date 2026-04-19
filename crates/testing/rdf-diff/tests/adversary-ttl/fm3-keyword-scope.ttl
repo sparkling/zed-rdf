@@ -1,0 +1,23 @@
+# Fixture FM3: `a`, `true`, `false` are position-sensitive keywords.
+#
+# Hypothesis: An over-eager keyword scanner may treat `a` as rdf:type in
+# non-predicate positions, or `true`/`false` as booleans outside object
+# position, producing incorrect parse errors or wrong node types.
+#
+# Expected: all three statements parse successfully.
+#   - `<http://example/s> a <http://example/C>` — `a` in predicate position
+#     is rdf:type (valid).
+#   - `<http://example/a>` in subject position is an IRI, NOT the keyword.
+#   - `true` in object position is the boolean literal
+#     "true"^^xsd:boolean (valid).
+#
+# Divergence signal: AcceptRejectSplit or ObjectMismatch if keyword leaks
+# into subject or IRI positions.
+#
+# Spec: Turtle §2.4; grammar `verb ::= predicate | 'a'`;
+#       `object ::= ... | BooleanLiteral`.
+
+<http://example/s> a <http://example/C> .
+<http://example/a> <http://example/p> <http://example/o> .
+<http://example/s> <http://example/p> true .
+<http://example/s> <http://example/p> false .

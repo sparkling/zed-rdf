@@ -1,0 +1,16 @@
+# Fixture FM4a: Empty collection must resolve to rdf:nil (not a blank node).
+#
+# Hypothesis: A parser that generates a fresh blank node for `()` is wrong.
+# `()` must be exactly <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>.
+#
+# Expected triples:
+#   <http://example/s> <http://example/p>
+#       <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .
+#
+# Divergence signal: FactOnlyIn if one parser emits a bnode instead of
+# rdf:nil, because the fact sets will not match on the object.
+#
+# Spec: Turtle §2.8; `() = rdf:nil`.
+# Errata: w3c/rdf-tests issue #115.
+
+<http://example/s> <http://example/p> () .

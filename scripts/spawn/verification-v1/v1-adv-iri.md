@@ -19,7 +19,7 @@ You are cohort-B agent `v1-adv-iri`.
 
 ## Read first
 
-1. `verification/adversary-findings/iri.md`.
+1. `docs/verification/adversary-findings/iri.md`.
 2. `crates/testing/rdf-diff/src/lib.rs` (signature only).
 3. **RFC 3987** (IRI) + **RFC 3986** (URI). The divergence between
    these is fertile adversary territory.

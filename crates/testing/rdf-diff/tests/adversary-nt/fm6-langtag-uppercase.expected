@@ -1,0 +1,12 @@
+# Adversary fixture: FM6-a — language tag in uppercase (@EN)
+# Hypothesis: Under RDF 1.1 "Hello"@EN and "Hello"@en are distinct literals.
+#   Under RDF 1.2 draft they must normalise to @en and become equal.
+#   A parser targeting 1.1 grammar but applying 1.2 case normalisation
+#   (or vice versa) will produce the wrong equality decision.
+# Expected outcome: accept-with-1-fact; langtag stored as-is (@EN) under 1.1,
+#   normalised to @en under 1.2
+outcome: accept
+fact-count: 1
+object-lang-tag: EN (stored as-is under RDF 1.1) / en (normalised under RDF 1.2)
+divergence-hypothesis: ObjectMismatch — version-mismatch on language tag case
+spec-ref: W3C RDF 1.1 N-Triples §2.4; RDF 1.2 draft §2.4 language tag normalisation

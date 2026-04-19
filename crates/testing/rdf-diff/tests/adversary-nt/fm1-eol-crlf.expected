@@ -1,0 +1,8 @@
+# Adversary fixture: FM1-b — CRLF line endings
+# Hypothesis: parsers accepting only LF will reject this; spec permits
+#   CRLF as a single EOL token (EOL ::= [#xD#xA]+).
+# Expected outcome: accept-with-2-facts
+outcome: accept
+fact-count: 2
+divergence-hypothesis: AcceptRejectSplit — LF-only parsers reject
+spec-ref: W3C RDF 1.1 N-Triples §2 grammar EOL production

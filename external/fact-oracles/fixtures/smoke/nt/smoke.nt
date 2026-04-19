@@ -1,0 +1,21 @@
+# Smoke-fixture N-Triples input for `cargo run -p xtask -- verify`.
+#
+# Minimal, hand-audited. Picked for these properties:
+#
+# - Covers one IRI, one plain literal, one typed literal, one BNode,
+#   one language-tagged literal — enough for the canonicalisation path
+#   to disagree across shadows if canonicalisation is wrong.
+# - Deliberately includes mixed ASCII-only and non-BMP characters (the
+#   "Ünïcødé" literal + the U+1F600 😀) to exercise literal escaping.
+# - No `@prefix` — this is pure N-Triples, so it survives the smallest
+#   possible parser subset.
+#
+# Referenced by ADR-0020 §Acceptance ("`cargo run -p xtask -- verify`
+# green on a smoke fixture"). Adding cases here is cheap; deleting or
+# renaming them may shift CI semantics, so prefer additive edits.
+
+<http://example.org/alice> <http://example.org/knows> <http://example.org/bob> .
+<http://example.org/alice> <http://xmlns.com/foaf/0.1/name> "Alice" .
+<http://example.org/bob> <http://xmlns.com/foaf/0.1/name> "Bøb Ünïcødé 😀"@en .
+<http://example.org/alice> <http://example.org/age> "30"^^<http://www.w3.org/2001/XMLSchema#integer> .
+_:carol <http://example.org/knows> <http://example.org/alice> .

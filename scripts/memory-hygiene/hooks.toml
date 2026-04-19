@@ -1,0 +1,33 @@
+# Memory-hygiene hook registration (ADR-0019 §6).
+#
+# Owner: v1-memory-ttl. Consumer: v1-ci-wiring wires these into the
+# project's active ruflo hook config at `.claude-flow/hooks/`. Changes
+# here must be mirrored there; this file is the source of truth for the
+# memory-hygiene family.
+#
+# Format: ruflo-compatible TOML. Each `[[hook]]` entry registers one
+# handler. `event` selects the lifecycle point; `command` is invoked with
+# the listed env vars populated by the runner.
+
+[[hook]]
+id          = "memory-hygiene.cohort-guard"
+event       = "pre-memory-op"          # fires before memory_store / memory_search
+command     = "node scripts/memory-hygiene/cohort-guard.mjs check --agent=\"${RUFLO_AGENT_ID}\" --action=\"${RUFLO_MEMORY_ACTION}\" --namespace=\"${RUFLO_MEMORY_NAMESPACE}\" --quiet"
+fail_closed = true                      # non-zero exit aborts the memory op
+priority    = 1                         # first — this is the access gate
+
+[[hook]]
+id          = "memory-hygiene.falsification"
+event       = "test-failure"
+command     = "node scripts/memory-hygiene/falsification-hook.mjs --test-id=\"${RUFLO_TEST_ID}\" --quiet"
+# Runner pipes the namespace listing to stdin as {"test_id", "entries":[...]}.
+stdin       = "memory-listing"
+fail_closed = false                     # advisory; quarantine manifest is the signal
+
+[[hook]]
+id          = "memory-hygiene.ttl-sweep"
+event       = "daily"                   # runs nightly via ruflo daemon scheduler
+command     = "node scripts/memory-hygiene/ttl-sweep.mjs --ttl-days=7"
+stdin       = "memory-listing"
+fail_closed = false
+schedule    = "0 3 * * *"               # 03:00 UTC; runner may override

@@ -1,0 +1,25 @@
+# Fixture FM5: Long string literals may contain raw (unescaped) newlines;
+# short string literals may NOT.
+#
+# Hypothesis: An implementation that uses the same lexer path for short and
+# long strings may either:
+#   (a) accept a raw newline inside a short-quoted string (wrong: parse error);
+#   (b) reject a raw newline inside a long-quoted string (wrong: valid content).
+#
+# This fixture contains only the VALID long-string form. An additional
+# `fm5-short-string-newline-invalid.ttl` tests the error case.
+#
+# Expected: parse succeeds; the object is a plain literal containing
+# a newline character (U+000A) between "line1" and "line2".
+#
+# Divergence signal: AcceptRejectSplit if one parser applies short-string
+# rules inside long quotes.
+#
+# Spec: Turtle §2.5.2; §6.3 STRING_LITERAL_LONG_QUOTE vs
+#       STRING_LITERAL_QUOTE.
+
+<http://example/s> <http://example/p> """line1
+line2""" .
+<http://example/s> <http://example/q> """multi
+line
+literal""" .

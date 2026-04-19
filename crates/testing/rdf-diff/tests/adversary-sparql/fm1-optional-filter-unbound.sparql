@@ -1,0 +1,24 @@
+# Fixture: fm1-optional-filter-unbound
+# Finding: Failure Mode 1 — OPTIONAL + FILTER on unbound variable
+# Spec: SPARQL 1.1 §12.3.1 (OPTIONAL scoping), §17.3 (FILTER evaluation)
+# Errata: SE-2
+#
+# Hypothesis: The outer FILTER references ?x which is only bound inside the
+# OPTIONAL. When the OPTIONAL branch does not match, ?x is unbound for that
+# solution. Per §17.3, evaluating (?x > 3) with an unbound ?x raises a type
+# error, and a type error in FILTER causes the solution to be DISCARDED.
+#
+# Divergence: An implementation treating "unbound in FILTER" as `false`
+# discards solutions that should survive (over-discard). One treating it as
+# `true` retains solutions that should be discarded (over-include).
+# Expected grammar-level behaviour: parses successfully; divergence is in
+# evaluation semantics.
+
+SELECT * WHERE {
+  ?s <http://example/p> ?o .
+  OPTIONAL {
+    ?s <http://example/q> ?x .
+    FILTER(?x > 5)
+  }
+  FILTER(?x > 3)
+}

@@ -1,6 +1,6 @@
 //! Property tests for the `rdf-diff` frozen trait surface.
 //!
-//! Tracked in `verification/tests/catalogue.md` under invariants
+//! Tracked in `docs/verification/tests/catalogue.md` under invariants
 //! `P1`, `P2`, `P3`. These tests integrate against the frozen API defined
 //! in `crates/testing/rdf-diff/src/lib.rs`; per ADR-0020 §1.4 the
 //! signatures are immutable for the duration of the verification-v1 sweep.

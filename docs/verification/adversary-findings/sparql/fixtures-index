@@ -1,0 +1,126 @@
+agent: v1-adv-sparql
+cohort: cohort-b
+sweep: verification-v1
+date: 2026-04-19
+
+fixtures_root: crates/testing/rdf-diff/tests/adversary-sparql/
+test_module: crates/testing/rdf-diff/tests/adversary_sparql.rs
+
+# Primary fixtures (one per failure mode from sparql.md)
+
+fm1:
+  file: fm1-optional-filter-unbound.sparql
+  finding: OPTIONAL + FILTER on unbound variable
+  expected_outcome: accept
+  divergence_type: evaluation-semantics (unbound-as-error vs unbound-as-false)
+  spec: §12.3.1, §17.3; errata SE-2
+  real_divergence: yes — over-include vs correct-discard
+
+fm2:
+  file: fm2-minus-no-shared-variable.sparql
+  finding: MINUS with zero shared variables has no effect
+  expected_outcome: accept
+  divergence_type: evaluation-semantics (MINUS vs NOT EXISTS)
+  spec: §12.6
+  real_divergence: yes — incorrect removal when MINUS treated as NOT EXISTS
+
+fm3:
+  file: fm3-construct-bnode-per-row.sparql
+  finding: CONSTRUCT blank node per solution row (locally scoped)
+  expected_outcome: accept
+  divergence_type: blank-node identity (per-row vs global)
+  spec: §10.3; errata SE-1
+  real_divergence: yes — merged vs correctly distinct blank nodes
+
+fm4:
+  file: fm4-having-select-alias.sparql
+  finding: HAVING references SELECT aggregate alias
+  expected_outcome: accept
+  divergence_type: evaluation-order (HAVING before vs after SELECT projection)
+  spec: §11.4, §11.4.2; errata SE-3
+  real_divergence: yes — HAVING fails to resolve alias in strict-order impls
+
+fm5:
+  file: fm5-base-mid-query.sparql
+  finding: BASE inside WHERE clause — grammar violation
+  expected_outcome: REJECT (parse error)
+  divergence_type: accept/reject split
+  spec: §3.1; grammar Prologue ::= (BaseDecl | PrefixDecl)*
+  real_divergence: HIGH CONFIDENCE — Turtle-reusing parsers accept silently
+
+fm6:
+  file: fm6-graph-variable-default-graph.sparql
+  finding: GRAPH ?g does not match default graph
+  expected_outcome: accept
+  divergence_type: dataset semantics (named-graph enumeration)
+  spec: §13.3, §18.5
+  real_divergence: yes — default-graph-as-named implementations over-return
+
+fm7:
+  file: fm7-filter-not-exists-vs-optional.sparql
+  finding: FILTER NOT EXISTS is not OPTIONAL/FILTER(!BOUND) rewrite
+  expected_outcome: accept
+  divergence_type: evaluation-semantics (optimiser rewrite safety)
+  spec: §12.5
+  real_divergence: yes — incorrect rewrite changes results when all vars shared
+
+fm8:
+  file: fm8-insert-data-bnode-scope.sparql
+  finding: INSERT DATA blank node scope per operation
+  expected_outcome: accept (as SPARQL Update)
+  divergence_type: blank-node identity (per-occurrence vs per-operation)
+  spec: SPARQL Update §3.1.1
+  real_divergence: yes — per-occurrence minting splits intended single node
+
+fm9:
+  file: fm9-inverse-negated-property-path.sparql
+  finding: ^!(p) precedence — ^(!(p)) not !(^p)
+  expected_outcome: accept
+  divergence_type: grammar/operator-precedence
+  spec: §9.3; public-sparql-dev 2012
+  real_divergence: yes — different path expression entirely
+
+# Extended fixtures (SERVICE nesting, BIND scoping, subquery projection)
+
+fm10:
+  file: fm10-service-nesting.sparql
+  finding: Nested SERVICE is valid per grammar
+  expected_outcome: accept
+  divergence_type: accept/reject split (depth-limit impls reject)
+  spec: SPARQL 1.1 Federated §4
+  real_divergence: potential — depth-limited parsers reject valid queries
+
+fm11:
+  file: fm11-bind-scoping.sparql
+  finding: BIND defines ?x, used after — legal form
+  expected_outcome: accept
+  divergence_type: evaluation-semantics (BIND ordering)
+  spec: §18.2.1
+  real_divergence: minor
+
+fm11b:
+  file: fm11b-bind-scoping-violation.sparql
+  finding: ?x used before its BIND — query error
+  expected_outcome: REJECT (query error)
+  divergence_type: accept/reject split
+  spec: §18.2.1
+  real_divergence: yes — lenient impls accept and silently unbind ?x
+
+fm12:
+  file: fm12-subquery-projection.sparql
+  finding: Variable not projected by subquery SELECT is unbound in outer query
+  expected_outcome: accept; ?internal unbound
+  divergence_type: evaluation-semantics (subquery scope leak)
+  spec: §12.3.2
+  real_divergence: yes — scope-leaking impls bind ?internal in outer query
+
+# Reject candidates (surfaces accept/reject split as AcceptRejectSplit divergence)
+reject_candidates:
+  - fm5-base-mid-query.sparql
+  - fm11b-bind-scoping-violation.sparql
+
+# Highest-confidence real-divergence candidates
+high_confidence:
+  - fm5-base-mid-query.sparql   (grammar violation; Turtle-reusing parsers)
+  - fm1-optional-filter-unbound.sparql   (SE-2 errata; well-known implementation bug)
+  - fm9-inverse-negated-property-path.sparql   (operator precedence; known divergence 2012)

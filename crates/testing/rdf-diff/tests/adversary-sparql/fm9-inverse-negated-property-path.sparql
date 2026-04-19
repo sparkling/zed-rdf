@@ -1,0 +1,24 @@
+# Fixture: fm9-inverse-negated-property-path
+# Finding: Failure Mode 9 — Inverse negated property path precedence
+# Spec: SPARQL 1.1 §9.3; grammar PathElt ::= PathPrimary PathMod?,
+#       PathPrimary ::= '^' PathElt | ...
+# Mailing list: public-sparql-dev "inverse negated property paths" (2012)
+#
+# Hypothesis: ^!(rdf:type) means "match any triple where ?s is the OBJECT
+# and the predicate is NOT rdf:type" — i.e., (^(!(rdf:type))), invert the
+# negated set. This is NOT the same as !(^rdf:type) (negate the inverse
+# path). The ^ wraps the entire PathElement including the negated property
+# set. Operator precedence in property path evaluation is a known divergence.
+#
+# Divergence: An implementation that parses ^!(p) as !(^p) evaluates an
+# entirely different path expression. The combined fixture below exercises
+# all three forms in one query to maximise the chance of exposing precedence
+# disagreement across parsers.
+# Grammar-level behaviour: parses successfully.
+
+SELECT * WHERE {
+  ?s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?type .
+  ?s !(<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>|<http://www.w3.org/2002/07/owl#sameAs>) ?o .
+  ?s ^<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?class .
+  ?s ^!(<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>) ?x .
+}

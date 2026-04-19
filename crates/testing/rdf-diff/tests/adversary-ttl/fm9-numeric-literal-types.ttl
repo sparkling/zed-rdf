@@ -1,0 +1,31 @@
+# Fixture FM9: Numeric literal datatype assignment by token shape.
+#
+# Hypothesis: Implementations that post-process numeric tokens (e.g., strip
+# a fractional zero from `1.0`) will assign the wrong XSD datatype.
+# Additional edge: `-0` is a valid xsd:integer (maps to 0 under xsd:integer
+# lexical mapping); `+1` is xsd:integer, not xsd:decimal.
+#
+# Expected datatypes:
+#   1      -> xsd:integer   (INTEGER: no dot, no exponent)
+#   1.0    -> xsd:decimal   (DECIMAL: dot present, no exponent)
+#   1.0e0  -> xsd:double    (DOUBLE:  exponent present)
+#   +1     -> xsd:integer   (sign prefix, no dot)
+#   -0     -> xsd:integer   (negative sign, no dot; value = 0 per xsd:integer)
+#   1.5e2  -> xsd:double
+#   -1.5   -> xsd:decimal
+#
+# Divergence signal: ObjectMismatch on the datatype IRI component if the
+# numeric category is mis-detected.
+#
+# Spec: Turtle §2.5.5; grammar INTEGER, DECIMAL, DOUBLE productions.
+
+@prefix ex: <http://example/> .
+
+ex:s ex:int1    1 .
+ex:s ex:dec1    1.0 .
+ex:s ex:dbl1    1.0e0 .
+ex:s ex:int_pos +1 .
+ex:s ex:int_neg -0 .
+ex:s ex:dbl2    1.5e2 .
+ex:s ex:dec2    -1.5 .
+ex:s ex:int_big 9999999999999999999 .

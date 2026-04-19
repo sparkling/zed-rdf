@@ -1,0 +1,9 @@
+# Adversary fixture: FM4-a — blank node label with dot in the middle
+# Hypothesis: _:b.1 is valid; the grammar allows '.' in PN_CHARS* as long
+#   as the label does not END in '.'.  Must be accepted with 1 fact.
+# Expected outcome: accept-with-1-fact
+outcome: accept
+fact-count: 1
+subject-bnode-label: b.1
+divergence-hypothesis: none expected (valid input) — tests correct acceptance
+spec-ref: W3C RDF 1.1 N-Triples §2.2 BLANK_NODE_LABEL production

@@ -1,10 +1,13 @@
 # ADR-0019: Independent verification against shared-prior failure modes
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-04-19, infrastructure-landed;
+  differential-signal validation deferred to Phase A per §Validation note
+  below)
 - **Date:** 2026-04-19
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
 - **Amends:** ADR-0004 (adds `[dev-dependencies]` carve-out for reference oracles)
+- **Implemented-by:** ADR-0020 (`verification-v1` sweep)
 - **Tags:** `policy`, `testing`, `quality`, `agents`, `verification`
 
 ## Context and Problem Statement

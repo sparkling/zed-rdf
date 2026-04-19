@@ -1,6 +1,6 @@
 //! Shadow-vs-main snapshot tests.
 //!
-//! Tracked in `verification/tests/catalogue.md` under invariants
+//! Tracked in `docs/verification/tests/catalogue.md` under invariants
 //! `S1..S3`. Each test pins a **curated** input (N-Triples, Turtle,
 //! SPARQL) and asserts shadow-vs-main agreement via the frozen
 //! `rdf-diff` surface.

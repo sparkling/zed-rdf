@@ -11,6 +11,34 @@ members = [
     # crates/testing/ because it is test-only; main-parser builds do not
     # depend on it.
     "crates/testing/rdf-diff",
+    # Shadow parsers — second independent implementations used by the
+    # verification-v1 diff harness (ADR-0019 §3, ADR-0020 §1.4).
+    "crates/syntax/rdf-iri-shadow",
+    # Shadow N-Triples + N-Quads parser (cohort-A, v1-shadow-nt).
+    # Disjoint implementation for diff-harness verification.
+    "crates/syntax/rdf-ntriples-shadow",
+    # Shadow SPARQL 1.1 parser (cohort-A, v1-shadow-sparql).
+    # Disjoint grammar-only implementation for diff-harness verification.
+    "crates/syntax/sparql-syntax-shadow",
+    # Shadow Turtle 1.1 + TriG parser (cohort-A, v1-shadow-ttl).
+    # Disjoint implementation for diff-harness verification.
+    "crates/syntax/rdf-turtle-shadow",
+    # ADR-0019 §1 enforcement: asserts mechanically that no banned
+    # third-party RDF/SPARQL parser crate (oxttl, sophia_*, …) leaks
+    # into a workspace member's runtime dependency closure. Belt-and-
+    # braces companion to the `cargo-deny` gate in `deny.toml`.
+    "crates/testing/deny-regression",
+    # xtask runner for the verification-v1 PR gate (ADR-0020
+    # §Acceptance). `cargo run -p xtask -- verify` is the CI entry
+    # point and uploads per-format DiffReports on failure. Claimed by
+    # `v1-ci-wiring`.
+    "xtask/verify",
+    # Reference-parser oracle adapters (ADR-0019 §1 carve-out). Each
+    # upstream parser (oxttl, oxrdfxml, oxjsonld, spargebra, sophia_*)
+    # is pulled strictly as a `[dev-dependency]` of this crate; a
+    # `cargo tree -e normal` on it must show zero oracle edges. Claimed
+    # by `v1-oracle-rust`.
+    "crates/testing/rdf-diff-oracles",
 ]
 
 [workspace.package]
@@ -30,7 +58,7 @@ rust-version = "1.86"
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
-rust_2024_compatibility = "warn"
+rust_2024_compatibility = { level = "warn", priority = -1 }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -39,10 +39,10 @@ prompts, worktrees, or memory. The sweep's independence depends on this.
 Produce **per-format red-team briefs** that expose ambiguities the
 implementing hive is likely to misread:
 
-- `verification/adversary-findings/nt.md`
-- `verification/adversary-findings/ttl.md`
-- `verification/adversary-findings/iri.md`
-- `verification/adversary-findings/sparql.md`
+- `docs/verification/adversary-findings/nt.md`
+- `docs/verification/adversary-findings/ttl.md`
+- `docs/verification/adversary-findings/iri.md`
+- `docs/verification/adversary-findings/sparql.md`
 
 Each brief identifies: 3–10 candidate failure modes per format, with
 minimal-input sketches. These feed the per-format adversary testers
@@ -61,7 +61,7 @@ rationale only.
 ## Claims
 
 None; read-only on spec. Write-only to
-`verification/adversary-findings/*`.
+`docs/verification/adversary-findings/*`.
 
 ## Memory
 

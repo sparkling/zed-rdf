@@ -1,0 +1,23 @@
+# Fixture: fm2-minus-no-shared-variable
+# Finding: Failure Mode 2 — MINUS with disjoint variable sets
+# Spec: SPARQL 1.1 §12.6 (MINUS formal definition)
+# Mailing list: public-sparql-dev "MINUS semantics" (2014)
+#
+# Hypothesis: MINUS removes only solutions from the left that "share at least
+# one variable" with a matching solution on the right. Here the right-hand
+# pattern introduces fresh variables ?x and ?y that do not appear on the left
+# (?s and ?o). Per §12.6, MINUS must have NO effect — all left solutions
+# survive regardless of whether the right pattern matches any data.
+#
+# Divergence: An implementation that treats MINUS like FILTER NOT EXISTS
+# (i.e., removes any left solution when the right pattern has *any* solution
+# in the dataset) incorrectly eliminates solutions when the datasets for
+# right-side variables are non-empty.
+# Expected grammar-level behaviour: parses successfully.
+
+SELECT * WHERE {
+  ?s <http://example/p> ?o .
+  MINUS {
+    ?x <http://example/q> ?y .
+  }
+}

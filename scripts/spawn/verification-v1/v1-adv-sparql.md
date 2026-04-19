@@ -19,7 +19,7 @@ You are cohort-B agent `v1-adv-sparql`.
 
 ## Read first
 
-1. `verification/adversary-findings/sparql.md`.
+1. `docs/verification/adversary-findings/sparql.md`.
 2. `crates/testing/rdf-diff/src/lib.rs` (signature only).
 3. SPARQL 1.1 Query Language recommendation.
 

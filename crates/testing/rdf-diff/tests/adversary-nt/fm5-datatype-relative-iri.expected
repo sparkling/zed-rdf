@@ -1,0 +1,9 @@
+# Adversary fixture: FM5 — relative IRI as datatype
+# Hypothesis: <integer> has no scheme; NT requires ALL IRIREF tokens to be
+#   absolute.  A parser that validates subject/predicate/object IRIs for
+#   absoluteness but uses a laxer path for datatype IRIs will accept.
+# Expected outcome: reject
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — datatype-IRI validation skipped vs enforced
+spec-ref: W3C RDF 1.1 N-Triples §2.4 typed literals; §2.1 IRIREF absoluteness

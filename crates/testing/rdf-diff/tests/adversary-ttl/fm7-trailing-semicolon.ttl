@@ -1,0 +1,19 @@
+# Fixture FM7: Trailing semicolon after last predicate-object pair is valid.
+#
+# Hypothesis: An implementation that requires a verb + objectList after every
+# semicolon will reject this valid syntax, producing a parse error.
+#
+# Expected: parse succeeds; exactly one triple:
+#   <http://example/s> <http://example/p> <http://example/o> .
+#
+# Divergence signal: AcceptRejectSplit — strict-grammar implementation
+# rejects; conformant one accepts the bare trailing semicolon.
+#
+# Spec: Turtle §2.5.1 grammar:
+#   predicateObjectList ::= verb objectList (';' (verb objectList)?)*
+# The `?` makes the (verb objectList) after ';' optional.
+# Errata: w3c/rdf-tests issue #152.
+
+<http://example/s> <http://example/p> <http://example/o> ; .
+<http://example/s2> <http://example/p> <http://example/o1> ;
+                    <http://example/q> <http://example/o2> ; .

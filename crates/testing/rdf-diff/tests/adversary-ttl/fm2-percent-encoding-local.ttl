@@ -1,0 +1,18 @@
+# Fixture FM2: Percent-encoding in prefixed-name local part is NOT decoded.
+#
+# Hypothesis: A parser that percent-decodes the local part before appending
+# it to the prefix IRI will produce <http://example/café> (non-ASCII IRI).
+# The spec requires the percent-encoded form to be passed through unchanged,
+# yielding <http://example/caf%C3%A9>.
+#
+# Expected triple: <http://example/caf%C3%A9> <http://example/p> <http://example/o>
+# Divergence signal: ObjectMismatch / FactOnlyIn if one parser decodes and
+# the other keeps the percent-encoding.
+#
+# Spec: Turtle §2.4 — percent-encoded sequences are passed through unchanged.
+# Turtle §6.3 PLX ::= PERCENT | PN_LOCAL_ESC; PERCENT ::= '%' HEX HEX.
+
+@prefix ex: <http://example/> .
+
+ex:caf%C3%A9  ex:p   ex:o .
+ex:spa%20ce   ex:p   ex:o .

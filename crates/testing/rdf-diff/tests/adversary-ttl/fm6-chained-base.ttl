@@ -1,0 +1,23 @@
+# Fixture FM6b: Chained @base directives — each replaces the previous base.
+#
+# Hypothesis: An implementation that resolves relative IRIs against the
+# document's first (rather than most-recently-declared) base will produce
+# wrong absolute IRIs for triples after the second @base.
+#
+# Expected resolution:
+#   After first @base  <http://example/a/>: <r1> -> <http://example/a/r1>
+#   After second @base <http://example/b/>: <r2> -> <http://example/b/r2>
+#   After third  @base <http://example/c/>: <r3> -> <http://example/c/r3>
+#
+# Divergence signal: FactOnlyIn if IRI resolution uses stale base.
+#
+# Spec: Turtle §2.2.
+
+@base <http://example/a/> .
+<r1> <p> <o> .
+
+@base <http://example/b/> .
+<r2> <p> <o> .
+
+@base <http://example/c/> .
+<r3> <p> <o> .

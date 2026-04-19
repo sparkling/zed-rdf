@@ -1,0 +1,21 @@
+# Fixture: fm5-base-mid-query
+# Finding: Failure Mode 5 — BASE declaration inside WHERE clause (INVALID)
+# Spec: SPARQL 1.1 §3.1; grammar production Prologue ::= (BaseDecl | PrefixDecl)*
+#
+# Hypothesis: SPARQL 1.1 §3.1 restricts BASE to the Prologue, which appears
+# before the query form keyword (SELECT/CONSTRUCT/ASK/DESCRIBE). A BASE
+# declaration inside a WHERE clause is a grammar violation. Correct
+# implementations MUST reject this with a parse error.
+#
+# Divergence: An implementation that reuses the Turtle parser's IRI
+# resolution logic may silently accept BASE inside a group graph pattern
+# and apply the second base IRI to subsequent relative IRIs, producing
+# wrong IRI resolution without error. This is a real accept/reject split.
+# Expected grammar-level behaviour: PARSE ERROR (reject).
+
+BASE <http://example/a/>
+SELECT * WHERE {
+  <foo> <http://example/p> ?o .
+  BASE <http://example/b/>
+  <bar> ?q ?r .
+}

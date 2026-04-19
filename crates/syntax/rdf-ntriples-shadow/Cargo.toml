@@ -1,0 +1,25 @@
+[package]
+name = "rdf-ntriples-shadow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Independent shadow N-Triples + N-Quads parser for verification-v1 sweep (ADR-0020)."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Gated so main-parser builds never pull this shadow implementation.
+# Must be enabled explicitly when running the diff harness.
+default = []
+shadow = []
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../../testing/rdf-diff", version = "0.0.0" }
+thiserror = { workspace = true }

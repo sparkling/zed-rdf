@@ -1,0 +1,32 @@
+# Fixture IRI-008: Unicode NFC normalization of IRI characters
+#
+# RFC 3987 §5.3.2.2 recommends (SHOULD, not MUST) NFC normalization of IRI
+# characters before comparison.  RDF Concepts §3.1 does NOT mandate it —
+# IRI equality is strict string comparison.
+#
+# Therefore `http://example/caf\u00E9` (precomposed e-acute, NFC) and
+# `http://example/cafe\u0301` (decomposed e + combining acute, NFD) are
+# TWO DISTINCT IRIs in RDF, even though they are NFC-equivalent.
+#
+# Hypothesis: An implementation that applies NFC normalization to IRI
+# characters at parse time (often via a URI library that "helpfully"
+# normalizes) will unify these two subjects and merge their facts.
+# The divergence manifests as a collapsing of two distinct fact sets into
+# one.
+#
+# This is a subtle trap: many Unicode-aware string libraries normalize at
+# I/O boundaries, and a parser built on top of one will silently destroy
+# the NFD vs NFC distinction that RDF's spec deliberately preserves.
+#
+# Reference: W3C/rdf-tests issue #200 (WG discussion on NFC and IRI identity)
+# Spec: RFC 3987 §5.3.2.2, RDF Concepts §3.1
+
+# Subject A: U+00E9 LATIN SMALL LETTER E WITH ACUTE (precomposed, NFC)
+# Encoded as %C3%A9 in UTF-8
+<http://example/caf%C3%A9> <http://example.org/pred/form> "NFC-precomposed" .
+
+# Subject B: U+0065 LATIN SMALL LETTER E + U+0301 COMBINING ACUTE ACCENT (NFD)
+# Encoded as %65%CC%81 in UTF-8
+<http://example/cafe%CC%81> <http://example.org/pred/form> "NFD-decomposed" .
+
+# These are two different subjects. A NFC-normalizing parser merges them.

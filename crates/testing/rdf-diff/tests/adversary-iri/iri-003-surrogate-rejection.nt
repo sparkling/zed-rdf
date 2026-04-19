@@ -1,0 +1,15 @@
+# Fixture IRI-003b: surrogate code point in IRI — MUST be rejected
+#
+# This N-Triples fixture encodes the surrogate U+D800 via a percent-encoded
+# pair that represents the raw UTF-16 surrogate value %ED%A0%80.  In a
+# valid UTF-8 stream the lone surrogate is not representable as a Unicode
+# scalar value; the IRI is therefore invalid.
+#
+# A conformant parser MUST reject this as an ill-formed IRI.
+# A UTF-16 internal implementation may silently accept it — that is the
+# divergence we are probing.
+#
+# Spec: RFC 3987 §2.2, Errata 3937
+# Expected outcome: both parsers produce Diagnostics { fatal: true }
+
+<http://example/path/%ED%A0%80suffix> <http://example.org/pred/type> "surrogate-hi-encoded" .

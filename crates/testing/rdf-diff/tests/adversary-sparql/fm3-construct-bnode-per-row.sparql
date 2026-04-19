@@ -1,0 +1,23 @@
+# Fixture: fm3-construct-bnode-per-row
+# Finding: Failure Mode 3 — CONSTRUCT blank node scope per solution row
+# Spec: SPARQL 1.1 §10.3
+# Errata: SE-1 ("blank node in CONSTRUCT is local to each solution")
+#
+# Hypothesis: Each solution row in a CONSTRUCT result gets a *fresh* blank
+# node for the template label _:b. The two triples within one row share the
+# same blank node; across different rows the _:b label refers to *distinct*
+# blank nodes. An implementation that uses a single global blank node for _:b
+# across all rows merges all rows' generated triples onto one node — incorrect.
+#
+# Divergence: Parser / planner that shares blank-node identity globally
+# across result rows produces a merged graph where row-1 and row-2 share
+# the same blank node. Expected: one fresh blank node per template per row.
+# Grammar-level behaviour: parses successfully.
+
+CONSTRUCT {
+  ?s <http://example/p> _:b .
+  _:b <http://example/q> ?o .
+}
+WHERE {
+  ?s <http://example/r> ?o .
+}

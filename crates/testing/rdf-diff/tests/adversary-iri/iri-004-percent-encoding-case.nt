@@ -1,0 +1,32 @@
+# Fixture IRI-004: percent-encoding case sensitivity
+#
+# RFC 3986 §2.1: percent-encoding sequences are octets written as %XX
+# where XX is two hexadecimal digits.  The digits are case-insensitive
+# from a URI-equivalence perspective, but RDF Concepts §3.1 defines
+# IRI equality as a simple string comparison — no normalization.
+#
+# Therefore `%c3%a9` and `%C3%A9` (both encode the UTF-8 sequence for
+# U+00E9 LATIN SMALL LETTER E WITH ACUTE) are TWO DISTINCT IRIs in RDF.
+#
+# RFC 3986 §6.2.2.1 recommends normalizing percent-encoding to uppercase
+# hex digits.  An implementation that applies this recommendation at
+# parse time or storage time will incorrectly UNIFY the two IRIs below,
+# creating a spurious merge that corrupts graph identity.
+#
+# Hypothesis: If an implementation uppercases hex digits in percent
+# sequences at any point before comparison, it will treat these two
+# subject IRIs as equal and merge their facts — the diff will show zero
+# facts on one side (they collapsed) rather than two distinct subjects.
+#
+# Spec: RFC 3986 §2.1, §6.2.2.1
+#       RFC 3987 §3.1 (IRI-to-URI conversion normalizes to uppercase — only for URI form)
+#       RDF Concepts §3.1 (IRI equality is string equality)
+
+# Subject A: lowercase percent-encoding  (café)
+<http://example/caf%c3%a9> <http://example.org/pred/label> "cafe-lowercase-pct" .
+
+# Subject B: uppercase percent-encoding  (café)
+<http://example/caf%C3%A9> <http://example.org/pred/label> "cafe-uppercase-pct" .
+
+# These two triples have DISTINCT subjects in RDF.
+# A normalizing parser will merge them into one subject — divergence.

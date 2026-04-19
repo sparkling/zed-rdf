@@ -1,0 +1,33 @@
+# Fixture IRI-007: host case-folding and RDF IRI identity
+#
+# RFC 3986 §6.2.2.1 and RFC 3987 §5.3.2.1 recommend (SHOULD) lowercasing
+# the host component for normalization.  However, RDF Concepts §3.1 defines
+# IRI equality as a simple character-by-character string comparison, with
+# NO mandatory normalization.
+#
+# Therefore `http://EXAMPLE.COM/s` and `http://example.com/s` are TWO
+# DISTINCT IRIs in RDF, even though they resolve to the same HTTP resource.
+#
+# Hypothesis A (over-normalization): An implementation that lowercases the
+# host during IRI parsing will unify these two subjects, producing a
+# spurious merge in the parsed graph.  The diff will see one subject with
+# two facts instead of two subjects each with one fact.
+#
+# Hypothesis B (under-normalization): An implementation that NEVER
+# normalizes will correctly preserve both as distinct — but may fail W3C
+# interoperability tests that assume normalization occurred.
+#
+# W3C reference: public-rdf-comments thread "IRI normalization and
+# comparison" (2011) clarifies the intentional omission of normalization
+# from the RDF spec.
+#
+# Spec: RFC 3986 §6.2.2.1, RFC 3987 §5.3.2.1, RDF Concepts §3.1
+
+# Subject A: uppercased host — DISTINCT IRI in RDF
+<http://EXAMPLE.COM/subject> <http://example.org/pred/label> "uppercase-host" .
+
+# Subject B: lowercased host — DISTINCT IRI in RDF
+<http://example.com/subject> <http://example.org/pred/label> "lowercase-host" .
+
+# These are two different subjects. A normalizing parser merges them.
+# The predicate IRI is identical in both — normalized to lowercase already.

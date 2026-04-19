@@ -1,0 +1,29 @@
+# Fixture IRI-001: remove-dots above-root path
+#
+# RFC 3986 §5.2.4 "remove_dot_segments" must not allow `..` steps to
+# escape the root. All four references below use the same base; their
+# resolved IRIs are specified in comments.
+#
+# Hypothesis: An implementation that naively iterates `..` removals
+# without a "cannot go above root" guard will produce `http://d` for
+# the last triple (treating the root `/` as removable) instead of the
+# required `http://example/d`.  RFC 3986 §5.2.4 step 2C requires that
+# a leading `/../` be treated as `/`.
+#
+# Spec: RFC 3986 §5.2.4 (remove_dot_segments algorithm)
+#       IETF Errata 4005 (path-segment boundary during remove_dot_segments)
+
+@base <http://example/a/b/c> .
+@prefix p: <http://example.org/pred/> .
+
+# 1-level up: http://example/a/d
+<../d>     p:name "one-level-up" .
+
+# 2-levels up: http://example/d
+<../../d>  p:name "two-levels-up" .
+
+# 3-levels up (at root): http://example/
+<../../..>  p:name "three-levels-up-at-root" .
+
+# 4-levels up (CANNOT go above root): must be http://example/d, not http://d
+<../../../d>  p:name "above-root-clamped" .

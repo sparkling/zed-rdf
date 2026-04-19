@@ -1,0 +1,8 @@
+# Adversary fixture: FM1-a — bare CR as EOL
+# Hypothesis: parsers accepting only LF will reject this; spec (NT grammar
+#   EOL ::= [#xD#xA]+) permits bare CR.
+# Expected outcome: accept-with-2-facts
+outcome: accept
+fact-count: 2
+divergence-hypothesis: AcceptRejectSplit — LF-only parsers reject
+spec-ref: W3C RDF 1.1 N-Triples §2 grammar EOL production

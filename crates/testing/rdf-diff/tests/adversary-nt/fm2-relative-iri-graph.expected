@@ -1,0 +1,9 @@
+# Adversary fixture: FM2-b — relative IRI as graph name in N-Quads
+# Hypothesis: NQ inherits the NT absoluteness constraint for all IRI positions.
+#   A parser that only validates the first three positions will accept <g>
+#   as a graph name without error; a strict parser must reject.
+# Expected outcome: reject
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — graph-name IRI validation skipped vs enforced
+spec-ref: W3C RDF 1.1 N-Quads §2.1; absoluteness applies to graphLabel too

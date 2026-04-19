@@ -1,0 +1,21 @@
+# Fixture FM1b: @prefix redefinition — later declaration replaces earlier one.
+#
+# Hypothesis: An implementation that uses the FIRST prefix binding (rather
+# than the MOST RECENT one) for a given prefix label will resolve `ex:s` after
+# the redefinition to the wrong namespace IRI.
+#
+# Expected:
+#   Triple 1: <http://example/a/s> <http://example/a/p> <http://example/a/o>
+#   Triple 2: <http://example/b/s> <http://example/b/p> <http://example/b/o>
+#
+# Divergence signal: FactOnlyIn if the parser uses stale prefix bindings
+# after the redefinition.
+#
+# Spec: Turtle §2.4 — each @prefix declaration updates the active prefix map;
+# a second declaration for the same prefix label replaces the first.
+
+@prefix ex: <http://example/a/> .
+ex:s ex:p ex:o .
+
+@prefix ex: <http://example/b/> .
+ex:s ex:p ex:o .

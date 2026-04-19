@@ -1,0 +1,27 @@
+# Fixture: fm12-subquery-projection-list
+# Finding: Subquery projection — outer query references variable not
+#          projected by the inner SELECT
+# Spec: SPARQL 1.1 §12.3.2 (subquery scoping)
+#
+# Hypothesis: A subquery's SELECT clause determines which variables are
+# "in scope" for the outer query. Variables bound inside the subquery but
+# NOT in its SELECT list are NOT visible to the outer query. The outer
+# query referencing such a variable (?internal) produces an unbound
+# variable, which may silently evaluate to an empty result or be an error.
+#
+# Divergence: An implementation that leaks inner-subquery bindings through
+# the subquery's SELECT boundary will bind ?internal in the outer query;
+# correct behaviour is that ?internal is unbound or absent. This is the
+# projection-list edge case — what is *not* projected is as important as
+# what is.
+# Grammar-level behaviour: parses successfully; divergence at evaluation.
+
+SELECT ?s ?o ?internal WHERE {
+  ?s <http://example/p> ?o .
+  {
+    SELECT ?s WHERE {
+      ?s <http://example/p> ?o .
+      BIND(42 AS ?internal)
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "namespace": "verification/spec-readings",
+    "key": "reading-draft-turtle-escape",
+    "stored_at": "2026-04-15T10:00:00Z",
+    "tags": ["draft", "test:turtle-escape-regression"]
+  },
+  {
+    "namespace": "verification-v1",
+    "key": "followup-note",
+    "stored_at": "2026-04-18T10:00:00Z",
+    "test_id": "turtle-escape-regression"
+  },
+  {
+    "namespace": "verification-v1",
+    "key": "unrelated-fact",
+    "stored_at": "2026-04-18T10:00:00Z",
+    "tags": ["test:iri-percent-encoding"]
+  }
+]

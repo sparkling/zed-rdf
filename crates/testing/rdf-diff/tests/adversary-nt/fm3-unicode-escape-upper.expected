@@ -1,0 +1,10 @@
+# Adversary fixture: FM3-a — Unicode escape with uppercase hex digits
+# Hypothesis: both \u00E9 and \u00e9 must decode to the same literal
+#   (U+00E9, LATIN SMALL LETTER E WITH ACUTE).  A parser storing the raw
+#   escape form rather than the decoded code point will diverge.
+# Expected outcome: accept, literal value = é (U+00E9)
+outcome: accept
+fact-count: 1
+object-value: "\u00E9" decoded to U+00E9 (é)
+divergence-hypothesis: ObjectMismatch — raw-escape storage vs decoded storage
+spec-ref: W3C RDF 1.1 N-Triples §2.3 UCHAR + HEX productions (case-insensitive)

@@ -1,0 +1,19 @@
+# Fixture: fm11b-bind-scoping-violation
+# Finding: BIND scoping violation — ?x used before its BIND definition
+# Spec: SPARQL 1.1 §18.2.1
+#
+# Hypothesis: ?x appears in a triple pattern before the BIND that
+# introduces it in the same group graph pattern. Per §18.2.1 this is
+# a query error. Implementations that evaluate BIND lazily or re-order
+# triple patterns may silently accept and produce semantically wrong results.
+#
+# Divergence: Accept/reject split — strict implementations reject with a
+# query-error; lenient/lazy implementations accept and evaluate ?x as
+# unbound for the first triple pattern, then bound after BIND.
+# Expected grammar-level behaviour: QUERY ERROR (reject).
+
+SELECT * WHERE {
+  ?s <http://example/q> ?x .
+  BIND(CONCAT(STR(?o), "-suffix") AS ?x)
+  ?s <http://example/p> ?o .
+}

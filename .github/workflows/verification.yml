@@ -1,0 +1,120 @@
+# verification-v1 PR gate (ADR-0019 §Validation, ADR-0020 §Acceptance).
+#
+# Runs on every PR targeting `main`. Blocks merge unless all of the
+# following pass:
+#
+#   1. `cargo test --workspace --all-features`
+#   2. `cargo clippy --workspace --all-features -- -D warnings`
+#   3. `cargo deny check` (enforces ADR-0004 + the `[dev-dependencies]`
+#      carve-out from ADR-0019 §1)
+#   4. `cargo run -p xtask -- verify` — the differential diff harness
+#      across main + shadow parsers + JVM-materialised fact oracles.
+#
+# `DiffReport` JSON produced by step 4 is uploaded as a build artifact
+# on failure so the reviewer (`v1-reviewer`) can triage offline without
+# re-running the harness.
+#
+# No JVM at test-path time: Jena / rdf4j corpora are materialised by the
+# separate `fact-oracles.yml` workflow, committed to the repo as JSON,
+# and consumed here as data. See ADR-0019 §1.
+#
+# Claim (ADR-0020 §3): `.github/workflows/verification.yml`. Coordinated
+# with `fact-oracles.yml` (claimed by `v1-oracle-jvm`) which shares the
+# `external/fact-oracles/**` path.
+
+name: verification
+
+on:
+  pull_request:
+    branches: [main]
+  # Also run on direct pushes to main so the gate's own changes (e.g.
+  # this file) are exercised pre-tag.
+  push:
+    branches: [main]
+
+# Minimal permissions. The gate only reads the repo and writes
+# artifact uploads on failure; nothing else.
+permissions:
+  contents: read
+
+# One run per ref; older in-flight runs of the same PR are cancelled to
+# save CI minutes — the gate's outcome is a function of the tip commit.
+concurrency:
+  group: verification-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep cargo quiet on failures so logs focus on actual errors.
+  CARGO_TERM_COLOR: always
+  # Deterministic path for the xtask report tree; mirrored in
+  # `xtask/verify/src/main.rs::layout::REPORT_DIR`.
+  VERIFICATION_REPORT_DIR: target/verification-reports
+
+jobs:
+  verify:
+    name: cargo + xtask verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # Full history is not required; the PR gate is a function of
+          # the tip commit only.
+          fetch-depth: 1
+
+      # Toolchain is pinned in `rust-toolchain.toml` (ADR-0001). The
+      # action below respects that file, so no explicit `toolchain:`
+      # needs to be passed here — avoids drift.
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Include features + lockfile so shadow feature-gated builds
+          # don't share a cache key with feature-off builds.
+          shared-key: verification
+          cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-deny
+        # Pinned action; installs a cached `cargo-deny` binary.
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          # `check` alone runs all configured checks (licenses, bans,
+          # advisories, sources) per `deny.toml`.
+          arguments: --all-features
+
+      - name: cargo test (workspace, all features)
+        run: cargo test --workspace --all-features --locked
+
+      - name: cargo clippy (workspace, all features, deny warnings)
+        run: cargo clippy --workspace --all-features --locked -- -D warnings
+
+      - name: xtask verify (differential diff harness)
+        # Runs the frozen `rdf-diff` trait surface against the main and
+        # shadow parsers plus any oracle JSONs present under
+        # `external/fact-oracles/`. Non-zero exit means a non-allow-
+        # listed divergence. Artefact upload below happens regardless.
+        run: cargo run -p xtask --locked -- verify
+
+      - name: Upload DiffReport artefacts (always)
+        # Uploads on both success and failure — success uploads are
+        # cheap and make before/after diffing of `DiffReport`s trivial
+        # during the v1 sweep. Step is `if: always()` so a cargo-test
+        # failure earlier still produces whatever reports xtask managed
+        # to write during a local dev run (none in CI itself, but the
+        # conditional keeps the semantics honest).
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-reports
+          path: ${{ env.VERIFICATION_REPORT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,69 @@
+[package]
+name = "rdf-diff-oracles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Reference-parser oracle adapters for the verification-v1 diff harness (ADR-0019 §1 carve-out, ADR-0020 §1.4)."
+
+[lib]
+path = "src/lib.rs"
+
+# Per-oracle features so downstream harness tests can isolate which
+# oracle(s) to run. Enabling a feature flips on the corresponding adapter
+# module **inside the crate's own test scope**; it does not pull the
+# upstream parser into any non-test dependency edge.
+#
+# See ADR-0019 §1 for the oracle carve-out and ADR-0020 §1.4 for the
+# frozen `rdf_diff::Parser` trait these adapters implement.
+[features]
+default = []
+oracle-oxttl = []
+oracle-oxrdfxml = []
+oracle-oxjsonld = []
+oracle-oxsparql = []
+oracle-sophia = []
+
+[lints]
+workspace = true
+
+[dependencies]
+# Normal dependency on the frozen trait surface only. Per ADR-0019 §1,
+# **no** ox*/sophia_* crate may appear here. `cargo tree -e normal` must
+# show zero oracle crates.
+rdf-diff = { path = "../rdf-diff", version = "0.0.0" }
+
+# -----------------------------------------------------------------------------
+# Oracle crates — strictly `[dev-dependencies]` per ADR-0019 §1.
+# -----------------------------------------------------------------------------
+# These are reference parsers used only for differential testing. They
+# MUST NOT be promoted to `[dependencies]`, `[build-dependencies]`, or
+# appear in the dependency closure of any non-test binary. cargo-deny
+# (configured by `v1-cargo-deny`) enforces this.
+#
+# `oxsparql-syntax` is unpublished; the oxigraph project ships the
+# SPARQL parser as `spargebra` (same source tree, same maintainer,
+# MIT/Apache-2.0). We pin `spargebra` here and the `oxsparql_adapter`
+# module documents the rename. ADR-0019 §1 lists the role, not the
+# crate name, so this stays within the carve-out.
+[dev-dependencies]
+# `oxrdf` is the term/triple/quad model used by oxttl / oxrdfxml /
+# oxjsonld. The adapters pattern-match on `oxrdf::{Triple, Quad, Term,
+# NamedOrBlankNode, GraphName}` so we declare it explicitly here (it's
+# also a transitive dev-dep of the three above — this entry just gives
+# us a `use oxrdf::…` path). Stays in the dev-dep graph; `cargo tree
+# -e normal` confirms zero oxrdf edges under the normal graph.
+oxrdf = "0.3"
+oxttl = "0.2"
+oxrdfxml = "0.2"
+oxjsonld = "0.2"
+spargebra = "0.4"
+# sophia_* is explicitly marked "optional" in ADR-0019 §1. sophia ships
+# under CECILL-B which is not on the workspace allow-list; we pull
+# `sophia_api` + `sophia_turtle` only as a dev-dep here and rely on the
+# cargo-deny carve-out (`v1-cargo-deny`) to allow these licenses under
+# the dev-only graph.
+sophia_api = "0.9"
+sophia_turtle = "0.9"

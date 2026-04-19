@@ -1,0 +1,268 @@
+# ADR-0019 §1 / ADR-0020 §3 — JVM fact oracle materialisation.
+#
+# Runs Jena and rdf4j over the W3C RDF test suites at a pinned commit and
+# emits pinned JSON fact corpora under `external/fact-oracles/<lang>/` that
+# the Rust diff harness consumes without any JVM in the Rust test path.
+#
+# Claim (ADR-0020): `.github/workflows/fact-oracles.yml`, `external/fact-oracles/**`.
+# Schema:          `external/fact-oracles/README.md` (hash-pinned in agent memory).
+
+name: fact-oracles
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_fixture:
+        description: "Run against the inline smoke fixture instead of requiring external/tests/ (phase-A prerequisite)."
+        type: boolean
+        default: false
+      open_pr:
+        description: "Open a PR with the refreshed corpora. Direct push to main is forbidden."
+        type: boolean
+        default: true
+  schedule:
+    # Weekly, Monday 04:17 UTC — off the hour to dodge the cron thundering herd.
+    - cron: "17 4 * * 1"
+  pull_request:
+    paths:
+      - "external/tests/**"
+      - "external/fact-oracles/**"
+      - ".github/workflows/fact-oracles.yml"
+
+# Minimum viable permissions. The `oracles` job reads the repo and writes
+# artefacts; the `open-pr` job additionally needs to push a branch and open
+# a PR against main via peter-evans/create-pull-request.
+permissions:
+  contents: read
+
+concurrency:
+  group: fact-oracles-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # --- W3C suite pin ------------------------------------------------------
+  # Consolidated upstream: https://github.com/w3c/rdf-tests
+  # Covers N-Triples, N-Quads, Turtle, TriG, RDF/XML manifests.
+  W3C_RDF_TESTS_REPO: "w3c/rdf-tests"
+  # Pinned to a specific commit SHA. Bumping this is an ADR-level decision —
+  # see external/fact-oracles/README.md §"Pinning policy".
+  W3C_RDF_TESTS_COMMIT: "8b5e3c9f4a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+
+  # --- JVM parser pins ----------------------------------------------------
+  # Mirrored in external/fact-oracles/tools/pom.xml; the workflow re-asserts
+  # them so a pom edit alone cannot silently shift the oracle.
+  JENA_VERSION: "4.10.0"
+  RDF4J_VERSION: "5.0.2"
+
+  # --- Output layout ------------------------------------------------------
+  ORACLE_OUT_DIR: "external/fact-oracles"
+
+jobs:
+  oracles:
+    name: materialise (${{ matrix.lang }} / ${{ matrix.parser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [nt, nq, ttl, trig, rdfxml]
+        parser: [jena, rdf4j]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve suite source (vendored or pinned W3C commit)
+        id: suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          LANG_ID="${{ matrix.lang }}"
+          SMOKE="${{ github.event.inputs.smoke_fixture }}"
+
+          # 1) vendored (phase-A prerequisite): external/tests/<lang>/
+          if [ -d "external/tests/${LANG_ID}" ]; then
+            echo "source=vendored" >> "$GITHUB_OUTPUT"
+            echo "suite_dir=external/tests/${LANG_ID}" >> "$GITHUB_OUTPUT"
+            echo "suite_commit=$(git -C external/tests rev-parse HEAD 2>/dev/null || echo vendored)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2) smoke fixture — only on manual dispatch with smoke_fixture=true.
+          if [ "${SMOKE}" = "true" ] && [ -d "external/fact-oracles/fixtures/smoke/${LANG_ID}" ]; then
+            echo "source=smoke" >> "$GITHUB_OUTPUT"
+            echo "suite_dir=external/fact-oracles/fixtures/smoke/${LANG_ID}" >> "$GITHUB_OUTPUT"
+            echo "suite_commit=smoke-fixture" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 3) pinned upstream — scheduled + workflow_dispatch without smoke.
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "source=upstream" >> "$GITHUB_OUTPUT"
+            echo "suite_dir=.cache/w3c-rdf-tests/${LANG_ID}" >> "$GITHUB_OUTPUT"
+            echo "suite_commit=${W3C_RDF_TESTS_COMMIT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 4) PR path with neither vendored nor smoke — hard error pointing
+          #    at the phase-A prerequisite. We do not silently pull upstream
+          #    from a PR because PR diffs would be uncorrelated.
+          echo "::error title=Phase-A prerequisite missing::external/tests/${LANG_ID} is not vendored and smoke_fixture was not requested. Complete the phase-A W3C suite vendoring (see docs/adr/0018-phase-a-execution-plan.md) or re-run this workflow via workflow_dispatch with smoke_fixture=true."
+          exit 2
+
+      - name: Fetch pinned W3C suite (only when source=upstream)
+        if: steps.suite.outputs.source == 'upstream'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/w3c-rdf-tests
+          # Download a tarball at the pinned commit. Codeload is deterministic
+          # and does not require auth for public repos.
+          TARBALL=".cache/rdf-tests-${W3C_RDF_TESTS_COMMIT}.tar.gz"
+          curl -fsSL -o "${TARBALL}" \
+            "https://codeload.github.com/${W3C_RDF_TESTS_REPO}/tar.gz/${W3C_RDF_TESTS_COMMIT}"
+          tar -xzf "${TARBALL}" -C .cache/w3c-rdf-tests --strip-components=1
+          # Upstream lays out each language under its own directory. Map the
+          # matrix id to the upstream path; this is the only place that
+          # mapping lives.
+          case "${{ matrix.lang }}" in
+            nt)     src=".cache/w3c-rdf-tests/rdf/rdf11/rdf-n-triples" ;;
+            nq)     src=".cache/w3c-rdf-tests/rdf/rdf11/rdf-n-quads"   ;;
+            ttl)    src=".cache/w3c-rdf-tests/rdf/rdf11/rdf-turtle"    ;;
+            trig)   src=".cache/w3c-rdf-tests/rdf/rdf11/rdf-trig"      ;;
+            rdfxml) src=".cache/w3c-rdf-tests/rdf/rdf11/rdf-xml"       ;;
+          esac
+          if [ ! -d "${src}" ]; then
+            echo "::error title=Upstream layout drift::Expected ${src} in the pinned W3C tarball; update the lang→path map in .github/workflows/fact-oracles.yml."
+            exit 3
+          fi
+          mkdir -p ".cache/w3c-rdf-tests/${{ matrix.lang }}"
+          # Reflect the suite at a stable inner path so the tool sees a
+          # uniform layout regardless of source.
+          cp -a "${src}/." ".cache/w3c-rdf-tests/${{ matrix.lang }}/"
+
+      - name: Build fact-oracles tool (Maven, offline-friendly)
+        working-directory: external/fact-oracles/tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -DskipTests \
+              -Djena.version="${JENA_VERSION}" \
+              -Drdf4j.version="${RDF4J_VERSION}" \
+              package
+
+      - name: Materialise fact corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          LANG_ID="${{ matrix.lang }}"
+          PARSER="${{ matrix.parser }}"
+          SUITE_DIR="${{ steps.suite.outputs.suite_dir }}"
+          SUITE_COMMIT="${{ steps.suite.outputs.suite_commit }}"
+          OUT_DIR="${ORACLE_OUT_DIR}/${LANG_ID}"
+          mkdir -p "${OUT_DIR}"
+          # Short prefix of the commit for the filename — full SHA is also
+          # recorded inside the JSON.
+          SHORT="$(printf '%s' "${SUITE_COMMIT}" | cut -c1-12)"
+          OUT_FILE="${OUT_DIR}/${PARSER}-${SHORT}.json"
+          java -jar external/fact-oracles/tools/target/fact-oracles.jar \
+               --lang "${LANG_ID}" \
+               --parser "${PARSER}" \
+               --suite-dir "${SUITE_DIR}" \
+               --suite-commit "${SUITE_COMMIT}" \
+               --jena-version "${JENA_VERSION}" \
+               --rdf4j-version "${RDF4J_VERSION}" \
+               --out "${OUT_FILE}"
+          echo "ORACLE_OUT_FILE=${OUT_FILE}" >> "$GITHUB_ENV"
+
+      - name: Validate JSON against documented schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 external/fact-oracles/tools/validate_schema.py "${ORACLE_OUT_FILE}"
+
+      - name: Upload corpus artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fact-oracle-${{ matrix.lang }}-${{ matrix.parser }}
+          path: ${{ env.ORACLE_OUT_FILE }}
+          if-no-files-found: error
+          retention-days: 14
+
+  open-pr:
+    name: open PR with refreshed corpora
+    # Only for scheduled + manual runs; never on PR events (no self-PRs).
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.open_pr == 'true')
+    needs: oracles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all oracle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fact-oracle-*
+          path: .artifacts/fact-oracles
+
+      - name: Place corpora under external/fact-oracles/
+        shell: bash
+        run: |
+          set -euo pipefail
+          # download-artifact@v4 emits one subdirectory per artifact name:
+          #   .artifacts/fact-oracles/fact-oracle-<lang>-<parser>/<file>.json
+          # The artifact name is authoritative for <lang>; derive the
+          # destination path from it rather than from the filename.
+          mkdir -p external/fact-oracles
+          for dir in .artifacts/fact-oracles/fact-oracle-*; do
+            [ -d "${dir}" ] || continue
+            name="$(basename "${dir}")"              # fact-oracle-<lang>-<parser>
+            rest="${name#fact-oracle-}"              # <lang>-<parser>
+            lang="${rest%-*}"                        # <lang>
+            mkdir -p "external/fact-oracles/${lang}"
+            find "${dir}" -type f -name "*.json" -print0 \
+              | xargs -0 -I {} cp -a {} "external/fact-oracles/${lang}/"
+          done
+
+      - name: Open PR with refreshed fact corpora
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: automation/fact-oracles-refresh
+          base: main
+          title: "chore(fact-oracles): refresh JVM-materialised corpora"
+          commit-message: |
+            chore(fact-oracles): refresh JVM-materialised corpora
+
+            Automated refresh from the fact-oracles workflow. See
+            external/fact-oracles/README.md for the schema and pinning policy.
+          body: |
+            Automated refresh of `external/fact-oracles/**` materialised
+            out-of-process by Jena + rdf4j over the pinned W3C RDF test suites.
+
+            - W3C pin: `${{ env.W3C_RDF_TESTS_COMMIT }}`
+            - Jena: `${{ env.JENA_VERSION }}`
+            - rdf4j: `${{ env.RDF4J_VERSION }}`
+
+            ADR references: ADR-0019 §1, ADR-0020 §3.
+          add-paths: |
+            external/fact-oracles/**/*.json
+          labels: |
+            automation
+            verification-v1
+            fact-oracles
+          delete-branch: true

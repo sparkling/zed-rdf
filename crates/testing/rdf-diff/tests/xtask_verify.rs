@@ -1,6 +1,6 @@
 //! Integration test: exercise `xtask verify` on the smoke corpus.
 //!
-//! Tracked as invariant `I1` in `verification/tests/catalogue.md`.
+//! Tracked as invariant `I1` in `docs/verification/tests/catalogue.md`.
 //!
 //! `xtask verify` is claimed by `v1-ci-wiring` and does not exist on
 //! disk yet. This test locates the workspace root and invokes
@@ -63,10 +63,14 @@ fn xtask_verify_smoke_corpus_green() {
 #[test]
 fn catalogue_is_discoverable_from_workspace_root() {
     let root = workspace_root();
-    let cat = root.join("verification").join("tests").join("catalogue.md");
+    let cat = root
+        .join("docs")
+        .join("verification")
+        .join("tests")
+        .join("catalogue.md");
     assert!(
         cat.exists(),
-        "verification/tests/catalogue.md missing at {}",
+        "docs/verification/tests/catalogue.md missing at {}",
         cat.display()
     );
 }

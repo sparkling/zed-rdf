@@ -1,0 +1,109 @@
+# Adversary-NT fixtures index
+# Written by: v1-adv-nt (cohort B, verification-v1 sweep)
+# Format: adversary-nt (N-Triples / N-Quads)
+# Fixture root: crates/testing/rdf-diff/tests/adversary-nt/
+#
+# This file is the memory index required by v1-adv-nt's prompt.
+# It is also a machine-readable manifest for v1-ci-wiring to integrate
+# the adversary-nt run into xtask verify.
+#
+# Integration note for v1-ci-wiring:
+#   Add an --adversary-nt flag to `run_verify()` in xtask/verify/src/main.rs.
+#   The fixture root is:
+#     <workspace-root>/crates/testing/rdf-diff/tests/adversary-nt/
+#   Pair each *.nt / *.nq file with its *.expected side-car.
+#   Expected-file keys: outcome (accept|reject|accept-with-warnings),
+#     fact-count, divergence-hypothesis, spec-ref.
+#
+# Fixture count: 12 pairs (11 NT + 1 NQ input files, 12 .expected files,
+#   plus README.md). Multiple variants per failure mode for FM1, FM3, FM4, FM6.
+
+fixture_root: crates/testing/rdf-diff/tests/adversary-nt
+total_input_files: 12
+total_expected_files: 12
+
+## Fixture manifest
+
+stem: fm1-eol-bare-cr
+format: nt
+failure-mode: FM1 — EOL variants (bare CR)
+predicted-outcome: accept
+fact-count: 2
+spec: W3C RDF 1.1 N-Triples §2 grammar EOL ::= [#xD#xA]+
+
+stem: fm1-eol-crlf
+format: nt
+failure-mode: FM1 — EOL variants (CRLF)
+predicted-outcome: accept
+fact-count: 2
+spec: W3C RDF 1.1 N-Triples §2 grammar EOL ::= [#xD#xA]+
+
+stem: fm2-relative-iri-predicate
+format: nt
+failure-mode: FM2 — relative IRI prohibition (predicate)
+predicted-outcome: reject
+fact-count: 0
+spec: W3C RDF 1.1 N-Triples §2.1 absolute IRI requirement
+
+stem: fm2-relative-iri-graph
+format: nq
+failure-mode: FM2 — relative IRI prohibition (graph name)
+predicted-outcome: reject
+fact-count: 0
+spec: W3C RDF 1.1 N-Quads §2.1 absolute IRI requirement
+
+stem: fm3-unicode-escape-upper
+format: nt
+failure-mode: FM3 — Unicode escape case (\u00E9)
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2.3 UCHAR + HEX (case-insensitive)
+
+stem: fm3-unicode-escape-lower
+format: nt
+failure-mode: FM3 — Unicode escape case (\u00e9)
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2.3 UCHAR + HEX (case-insensitive)
+
+stem: fm4-bnode-dot-middle
+format: nt
+failure-mode: FM4 — blank node label (dot in middle, valid)
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2.2 BLANK_NODE_LABEL
+
+stem: fm4-bnode-trailing-dot
+format: nt
+failure-mode: FM4 — blank node label (trailing dot, INVALID)
+predicted-outcome: reject
+fact-count: 0
+spec: W3C RDF 1.1 N-Triples §2.2 BLANK_NODE_LABEL trailing PN_CHARS constraint
+
+stem: fm5-datatype-relative-iri
+format: nt
+failure-mode: FM5 — datatype IRI absoluteness
+predicted-outcome: reject
+fact-count: 0
+spec: W3C RDF 1.1 N-Triples §2.4 typed literals; §2.1 IRIREF absoluteness
+
+stem: fm6-langtag-uppercase
+format: nt
+failure-mode: FM6 — language tag case (uppercase @EN)
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2.4; RDF 1.2 draft §2.4
+
+stem: fm6-langtag-lowercase
+format: nt
+failure-mode: FM6 — language tag case (lowercase @en, canonical)
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2.4; BCP47
+
+stem: fm7-comment-no-final-newline
+format: nt
+failure-mode: FM7 — trailing comment with no final newline
+predicted-outcome: accept
+fact-count: 1
+spec: W3C RDF 1.1 N-Triples §2 ntriplesDoc production (final EOL optional)

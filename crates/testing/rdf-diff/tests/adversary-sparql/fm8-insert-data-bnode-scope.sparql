@@ -1,0 +1,21 @@
+# Fixture: fm8-insert-data-bnode-scope
+# Finding: Failure Mode 8 — INSERT DATA blank node scope per operation
+# Spec: SPARQL 1.1 Update §3.1.1
+#
+# Hypothesis: Within a single INSERT DATA operation, all occurrences of the
+# same blank node label refer to the same blank node. The two _:b references
+# below must produce ONE blank node with both the <p> and <q> arcs. An
+# implementation that generates a fresh blank node for every _:b occurrence
+# produces two separate blank nodes — splitting what should be a single node.
+#
+# Divergence: Per-occurrence fresh blank-node generation creates disconnected
+# nodes; correct behaviour requires per-operation scope where the same label
+# within one INSERT DATA = one blank node.
+# Grammar-level behaviour: parses successfully as SPARQL Update.
+
+INSERT DATA {
+  GRAPH <http://example/g> {
+    _:b <http://example/p> <http://example/o1> .
+    _:b <http://example/q> <http://example/o2> .
+  }
+}

@@ -1,9 +1,13 @@
 # ADR-0004: Third-party crate policy ("no forking" interpretation)
 
-- **Status:** Accepted (2026-04-18)
+- **Status:** Accepted (2026-04-18, amended 2026-04-19)
 - **Date:** 2026-04-18
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
+- **Amended-by:** ADR-0019 §1 (`[dev-dependencies]` carve-out for
+  reference oracles — `oxttl`, `oxrdfxml`, `oxjsonld`, `oxsparql-syntax`
+  /`spargebra`, `sophia_*`). Mechanical enforcement via `deny.toml` +
+  `crates/testing/deny-regression/`.
 - **Tags:** `policy`, `dependencies`, `supply-chain`
 
 ## Context and Problem Statement

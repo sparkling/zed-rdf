@@ -1,0 +1,30 @@
+# Fixture IRI-002: pure fragment reference resolution
+#
+# RFC 3986 §5.2.2: when R is a pure-fragment reference (`#foo`), the
+# algorithm sets T.scheme = Base.scheme, T.authority = Base.authority,
+# T.path = Base.path, T.query = Base.query, T.fragment = R.fragment.
+# The base path — INCLUDING any path component — is preserved.
+#
+# The base IRI below contains a fragment `#section1`; that must be
+# REPLACED by the reference fragment, not concatenated.
+#
+# Hypothesis: An implementation that strips the base fragment before
+# resolution but then re-appends the old base fragment when R.fragment
+# is non-empty will double-apply: producing
+# `http://example/doc#section1section2` or similar.  The correct result
+# is `http://example/doc#section2`.
+#
+# A second failure mode: an implementation that drops the base path when
+# resolving a pure-fragment will produce `http://example#section2`
+# instead of `http://example/doc#section2`.
+#
+# Spec: RFC 3986 §5.2.2 (reference resolution algorithm, R.fragment branch)
+
+@base <http://example/doc#section1> .
+@prefix p: <http://example.org/pred/> .
+
+# Must resolve to http://example/doc#section2  (NOT double-fragment)
+<#section2>  p:describes "pure-fragment-reference" .
+
+# Must resolve to http://example/doc  (empty fragment — no fragment component)
+<#>  p:describes "empty-fragment" .

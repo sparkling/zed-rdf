@@ -19,7 +19,7 @@ You are cohort-B agent `v1-adv-ttl`.
 
 ## Read first
 
-1. `verification/adversary-findings/ttl.md`.
+1. `docs/verification/adversary-findings/ttl.md`.
 2. `crates/testing/rdf-diff/src/lib.rs` (signature only).
 3. W3C Turtle 1.1 and TriG recommendations.
 

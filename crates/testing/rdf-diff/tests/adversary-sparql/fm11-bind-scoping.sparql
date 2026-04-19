@@ -1,0 +1,21 @@
+# Fixture: fm11-bind-scoping
+# Finding: BIND variable scoping — ?x defined by BIND must not appear
+#          in the same group graph pattern before the BIND.
+# Spec: SPARQL 1.1 §18.2.1 (variable scoping in group graph patterns)
+#
+# Hypothesis: SPARQL §18.2.1 states that a variable introduced by BIND
+# must not already appear in the group graph pattern up to that point.
+# The fixture below uses ?x in a triple pattern AFTER the BIND that
+# defines it — legal. A second fixture uses ?x BEFORE the BIND — which
+# is a grammar/semantic violation and must be rejected.
+#
+# Divergence: An implementation that accepts ?x before a BIND that also
+# defines ?x violates §18.2.1. This fixture tests the *legal* form;
+# the illegal form is in fm11b.
+# Grammar-level behaviour: parses successfully.
+
+SELECT * WHERE {
+  ?s <http://example/p> ?o .
+  BIND(CONCAT(STR(?o), "-suffix") AS ?x)
+  ?s <http://example/q> ?x .
+}

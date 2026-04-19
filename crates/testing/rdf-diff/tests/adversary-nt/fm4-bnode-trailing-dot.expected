@@ -1,0 +1,10 @@
+# Adversary fixture: FM4-b — blank node label ending in a dot
+# Hypothesis: _:b1. is INVALID; the grammar's trailing PN_CHARS constraint
+#   forbids a label ending in '.'.  A greedy regex like [A-Za-z0-9._-]+
+#   will absorb the '.' into the label and misparse the statement
+#   terminator, producing wrong output or silently accepting.
+# Expected outcome: reject  (or accept with divergent bnode label)
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — greedy-regex parsers accept and misparse
+spec-ref: W3C RDF 1.1 N-Triples §2.2 BLANK_NODE_LABEL — trailing PN_CHARS constraint

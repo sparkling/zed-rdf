@@ -1,0 +1,18 @@
+# Fixture FM5-invalid: Raw newline inside short string literal is a parse error.
+#
+# Hypothesis: An implementation that shares a lexer code path between short
+# and long strings may accept this input. Conformant parsers MUST reject it
+# because STRING_LITERAL_QUOTE forbids literal newlines.
+#
+# Expected: parse FAILS (Diagnostics { fatal: true }).
+# Divergence signal: AcceptRejectSplit — a lenient parser accepts, a strict
+# parser rejects. The presence of divergence IS the signal here.
+#
+# Spec: Turtle §6.3 STRING_LITERAL_QUOTE ::= '"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"'
+# U+000A (#xA) is explicitly excluded from the short-string character set.
+#
+# NOTE: This file intentionally contains a raw newline inside double-quotes.
+# Do not "fix" the file — the malformedness is the test.
+
+<http://example/s> <http://example/p> "line1
+line2" .

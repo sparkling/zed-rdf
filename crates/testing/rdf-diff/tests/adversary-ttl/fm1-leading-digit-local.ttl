@@ -1,0 +1,19 @@
+# Fixture FM1: Leading digit in local part of prefixed name.
+#
+# Hypothesis: Parsers that follow XML NCName rules (which forbid a leading
+# digit) will reject `ex:123` as invalid. Turtle §6.3 grammar explicitly
+# allows [0-9] at the start of PN_LOCAL — this is a deliberate deviation
+# from XML namespace conventions.
+#
+# Expected: parse succeeds; the triple subject is <http://example/123>.
+# Divergence signal: AcceptRejectSplit between a conformant parser and one
+# that applies XML NCName constraints to PN_LOCAL.
+#
+# Spec: Turtle §6.3 PN_LOCAL ::= (PN_CHARS_U | ':' | [0-9] | PLX) ...
+# Errata: w3c/rdf-tests issue #90.
+
+@prefix ex: <http://example/> .
+
+ex:123      ex:p   ex:o .
+ex:0start   ex:p   ex:o .
+ex:9end     ex:p   ex:o .

@@ -1,0 +1,19 @@
+# Fixture FM6: @base and BASE directives replace (not accumulate) the active
+# base IRI. SPARQL-style BASE must be supported in Turtle 1.1.
+#
+# Hypothesis:
+#   (a) A parser that ignores the SPARQL-style `BASE` keyword will resolve
+#       `<rel>` against `<http://example/a/>` instead of `<http://example/b/>`.
+#   (b) A parser that accumulates bases will also produce the wrong IRI.
+#
+# Expected: <rel> resolves to <http://example/b/rel>.
+#   Triple: <http://example/b/rel> <http://example/b/p> <http://example/b/o> .
+#
+# Divergence signal: ObjectMismatch or FactOnlyIn if the base is wrong.
+#
+# Spec: Turtle §2.2 — "The base URI is updated for each occurrence."
+# SPARQL-style BASE added in RDF 1.1 Turtle.
+
+@base <http://example/a/> .
+BASE <http://example/b/> .
+<rel> <p> <o> .

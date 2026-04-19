@@ -191,6 +191,18 @@ ADR-0006:
 - `hooks_session-end` emits a consolidated summary at session close.
 - Pattern distillation (via `memory-specialist` / ruflo learner) runs
   nightly via the daemon's `consolidate` worker.
+- **Memory-hygiene contract (amendment 2026-04-19, landed by
+  `v1-memory-ttl` under ADR-0020).** Non-pinned entries in `phase-*` and
+  `verification-*` namespaces expire after **7 days** (TTL sweep at
+  `scripts/memory-hygiene/ttl-sweep.mjs`, audit log at
+  `.claude-flow/audit/memory-hygiene/<date>.json`). A **falsification
+  hook** quarantines entries tagged with a test id when that test fails
+  (`scripts/memory-hygiene/falsification-hook.mjs`). A **cohort-tag
+  guard** (`scripts/memory-hygiene/cohort-guard.mjs`) wraps
+  `memory_store` / `memory_search`, consults `docs/agent-cohorts.md`, and
+  fails-closed on cross-cohort reads. Runbook in
+  `scripts/memory-hygiene/README.md`. See ADR-0019 §6 for the
+  original requirement.
 
 ### 9. What the orchestrator still does by hand
 

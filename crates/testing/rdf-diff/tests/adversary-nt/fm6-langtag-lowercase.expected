@@ -1,0 +1,10 @@
+# Adversary fixture: FM6-b — language tag in lowercase (@en) — canonical form
+# Hypothesis: This is the canonical BCP47 form.  All compliant parsers must
+#   accept it and produce "Hello"@en as the literal.  Paired with FM6-a to
+#   expose equality divergence when one parser normalises and the other does not.
+# Expected outcome: accept-with-1-fact
+outcome: accept
+fact-count: 1
+object-lang-tag: en
+divergence-hypothesis: ObjectMismatch vs FM6-a when parsers disagree on normalisation
+spec-ref: W3C RDF 1.1 N-Triples §2.4; W3C BCP47

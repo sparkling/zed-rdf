@@ -1,0 +1,22 @@
+# Fixture FM8: TriG blank-node labels are scoped per graph block, not per
+# document.
+#
+# Hypothesis: An implementation that uses a document-level blank-node label
+# table (as Turtle does for its single implicit graph) will unify `_:b` from
+# the default graph with `_:b` from the named graph, producing incorrect quads.
+#
+# Expected quads (four quads total):
+#   DEFAULT_GRAPH:          _:b1 <http://example/p> <http://example/o1>
+#   <http://example/g1>:    _:b2 <http://example/p> <http://example/o2>
+# where _:b1 and _:b2 are DISTINCT blank nodes.
+#
+# Divergence signal: FactOnlyIn — if the implementation unifies the blanks,
+# the triple in one graph may be attributed to the wrong blank node, causing
+# the diff to see either a missing or extra fact.
+#
+# Spec: TriG §2.2 / §3 — "blank node identifiers are local to a graph."
+
+{ _:b <http://example/p> <http://example/o1> . }
+<http://example/g1> { _:b <http://example/p> <http://example/o2> . }
+<http://example/g2> { _:b <http://example/p> <http://example/o3> .
+                      _:b <http://example/q> <http://example/o4> . }

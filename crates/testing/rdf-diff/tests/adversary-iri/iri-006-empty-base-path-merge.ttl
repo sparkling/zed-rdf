@@ -1,0 +1,32 @@
+# Fixture IRI-006: empty base path — merge-paths algorithm
+#
+# RFC 3986 §5.2.3 "Merge Paths" rule: if the base URI has a defined
+# authority and an EMPTY path, the merged path is `"/" + reference_path`.
+# This prevents path references from being concatenated directly onto the
+# authority component.
+#
+# Example: base = `http://example` (no trailing slash → empty path).
+#           reference = `foo`.
+#           Correct result: `http://example/foo`.
+#           Wrong result:   `http://examplefoo`  (string concatenation).
+#
+# Hypothesis: A simple resolver that does string concatenation of
+# authority + path reference when the base path is empty will produce
+# `http://examplefoo` — an IRI that looks like a different authority.
+# The Merge Paths algorithm in RFC 3986 §5.2.3 inserts the `/` but this
+# step is non-obvious and frequently omitted in hand-rolled resolvers.
+#
+# Spec: RFC 3986 §5.2.3 (Merge Paths)
+#       RFC 3986 §5.2.2 (Reference Resolution — step for empty base path)
+
+@base <http://example> .
+@prefix p: <http://example.org/pred/> .
+
+# Must resolve to http://example/foo  (slash inserted by merge algorithm)
+<foo>      p:name "relative-against-no-trailing-slash" .
+
+# Must resolve to http://example/bar/baz
+<bar/baz>  p:name "relative-path-against-empty-base-path" .
+
+# Must resolve to http://example/  (empty reference path + authority → root)
+<>         p:name "empty-reference-empty-base-path" .

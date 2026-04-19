@@ -1,0 +1,27 @@
+Agent: v1-adv-iri
+Sweep: verification-v1
+Date: 2026-04-19
+Directory: crates/testing/rdf-diff/tests/adversary-iri/
+
+Fixtures (9 files):
+  iri-001-remove-dots-above-root.ttl      FM-1  Turtle     above-root remove-dots clamping
+  iri-002-pure-fragment-resolution.ttl    FM-2  Turtle     pure #fragment preserves base path
+  iri-003-surrogate-and-private-use.ttl   FM-3  Turtle     private-use U+E001 must be accepted
+  iri-003-surrogate-rejection.nt          FM-3  N-Triples  %ED%A0%80 (lone surrogate) must be rejected
+  iri-004-percent-encoding-case.nt        FM-4  N-Triples  %c3%a9 vs %C3%A9 are distinct IRIs
+  iri-005-urn-absoluteness.nt             FM-5  N-Triples  urn: tag: data: are absolute without ://
+  iri-006-empty-base-path-merge.ttl       FM-6  Turtle     empty base path: slash inserted by merge algorithm
+  iri-007-host-case-folding.nt            FM-7  N-Triples  EXAMPLE.COM vs example.com are distinct
+  iri-008-nfc-normalization.nt            FM-8  N-Triples  NFC %C3%A9 vs NFD cafe%CC%81 are distinct
+
+Test module: crates/testing/rdf-diff/tests/adversary_iri.rs
+Always-on tests (no parser dep): all_adversary_iri_fixtures_present, adversary_iri_readme_present, iri_00N_*_fixture_present (9 structural checks)
+Ignored tests (diff-level, gated): iri_00N_*_no_divergence / *_not_unified / *_accepted_by_both (8 diff assertions)
+
+Highest-confidence divergences (likely to surface on first wire):
+  IRI-003b: surrogate %ED%A0%80 — AcceptRejectSplit most probable
+  IRI-004:  percent-encoding case unification — FactOnlyIn collapse most probable
+  IRI-007:  host case-folding — FactOnlyIn collapse most probable
+  IRI-006:  empty base path slash — FactOnlyIn wrong authority most probable
+
+Handoff: v1-adv-veto

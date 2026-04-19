@@ -1,0 +1,20 @@
+# Fixture: fm6-graph-variable-default-graph
+# Finding: Failure Mode 6 — GRAPH ?g must not match the default graph
+# Spec: SPARQL 1.1 §13.3; formal semantics §18.5
+#
+# Hypothesis: GRAPH ?g { ... } matches NAMED graphs only. The default graph
+# is never accessible via GRAPH. If the dataset contains only a default graph,
+# this query must return zero results. An implementation that represents the
+# default graph as an internally named entity may expose it via GRAPH ?g,
+# returning solutions when the correct answer is empty.
+#
+# Divergence: Implementation that includes the default graph in GRAPH ?g
+# iteration returns spurious results. Expected: zero results when no named
+# graphs exist in the dataset.
+# Grammar-level behaviour: parses successfully.
+
+SELECT * WHERE {
+  GRAPH ?g {
+    ?s ?p ?o .
+  }
+}

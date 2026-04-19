@@ -1,0 +1,23 @@
+# Fixture FM4b: Nested collections and single-element list blank nodes.
+#
+# Hypothesis: Implementations that flatten or confuse list nesting will
+# produce wrong graphs. The outer list's rdf:first for `((1))` must be
+# the blank node heading the inner list, not `1` itself.
+#
+# Expected for `(1)`:
+#   _:b0 rdf:first "1"^^xsd:integer .
+#   _:b0 rdf:rest  rdf:nil .
+#   <http://example/s> <http://example/p> _:b0 .
+#
+# Expected for `((1))`:
+#   outer: _:out rdf:first _:inn . _:out rdf:rest rdf:nil .
+#   inner: _:inn rdf:first "1"^^xsd:integer . _:inn rdf:rest rdf:nil .
+#
+# Divergence signal: FactOnlyIn or ObjectMismatch on rdf:first / rdf:rest
+# targets if nesting is flattened.
+#
+# Spec: Turtle §2.8.
+
+<http://example/s> <http://example/p1> (1) .
+<http://example/s> <http://example/p2> ((1)) .
+<http://example/s> <http://example/p3> (1 2) .

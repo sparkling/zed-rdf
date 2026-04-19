@@ -1,0 +1,35 @@
+# Fixture IRI-003: surrogate code points (invalid) vs private-use (valid)
+#
+# RFC 3987 §2.2 allows private-use characters (U+E000–U+F8FF,
+# U+F0000–U+FFFFD, U+100000–U+10FFFD) as IRI characters.  Surrogate
+# code points (U+D800–U+DFFF) are NOT allowed as Unicode scalar values
+# in IRI character sequences; they may only appear as percent-encoded
+# octet pairs in legacy contexts.
+#
+# RFC 3987 Errata 3937 explicitly clarifies: surrogates must not appear
+# as characters, only percent-encoded.
+#
+# Hypothesis A (surrogate): An implementation using a UTF-16 string
+# internally — or that accepts any value in the Unicode scalar range
+# without excluding D800–DFFF — will admit the surrogate IRI as valid.
+# The correct behaviour is to reject it.
+#
+# Hypothesis B (private-use): An overly restrictive implementation that
+# applies Unicode "assigned characters" or "printable characters" checks
+# will reject U+E001 paths that RFC 3987 explicitly permits.
+#
+# Surrogate test is a REJECTION fixture: both parsers should reject it.
+# Private-use test is an ACCEPTANCE fixture: both parsers should accept it.
+#
+# Spec: RFC 3987 §2.2 (IRI character ranges)
+#       RFC 3987 Errata 3937 (surrogate prohibition)
+
+@base <http://example/> .
+@prefix p: <http://example.org/pred/> .
+
+# Valid: private-use code point U+E001 in path — MUST be accepted.
+# (The literal U+E001 character is written here; parsers must preserve it.)
+<http://example/> p:path "\uE001-private-use-valid" .
+
+# Valid IRI using percent-encoded high private-use U+F0001
+<http://example/%F3%B0%80%81>  p:type "private-use-supplementary" .

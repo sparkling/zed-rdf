@@ -1,0 +1,9 @@
+# Adversary fixture: FM2 — relative IRI as predicate
+# Hypothesis: parsers that borrow Turtle IRI-resolution logic will silently
+#   accept <p> and resolve it against a default base (e.g. file:///);
+#   spec-compliant NT parsers must reject it.
+# Expected outcome: reject
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — lax parsers silently resolve relative IRI
+spec-ref: W3C RDF 1.1 N-Triples §2.1 "IRIs in N-Triples must be absolute IRIs"

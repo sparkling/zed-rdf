@@ -1,13 +1,13 @@
 # ADR-0020: Implementation plan for ADR-0019 — single-shot parallel swarm
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-04-19, `verification-v1/done` tag)
 - **Date:** 2026-04-19
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
 - **Instantiates:** ADR-0017 (execution model), ADR-0019 (independent
   verification)
 - **Tags:** `process`, `execution`, `agents`, `swarm`, `hive`, `ruflo`,
-  `verification`, `parallel`
+  `verification`, `parallel`, `historical`
 
 ## Context and Problem Statement
 
