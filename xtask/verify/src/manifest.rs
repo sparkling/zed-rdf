@@ -157,6 +157,18 @@ pub(crate) fn run_manifest(
     let mf_action = "<http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#action>";
     let mf_result = "<http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#result>";
     let mf_name = "<http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#name>";
+    let mf_assumed_test_base =
+        "<http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#assumedTestBase>";
+
+    // Extract `mf:assumedTestBase` (a single triple on the manifest
+    // subject, not per-entry). When present, the harness threads it
+    // through to `parse_for_language` so positive-syntax / eval fixtures
+    // that use relative IRIs can resolve them against the retrieval URL
+    // even when the fixture itself omits `@base` / `BASE` — closing the
+    // TTL-BASE-001 allow-list class. Multiple triples are tolerated; we
+    // take the lexicographically-first value for determinism and warn so
+    // the divergence surfaces in review.
+    let assumed_test_base = extract_assumed_test_base(&index, mf_assumed_test_base);
 
     // Walk every subject and check whether its rdf:type is a test class.
     let mut entries: Vec<(String, TestKind)> = Vec::new();
@@ -215,7 +227,16 @@ pub(crate) fn run_manifest(
             }
         };
 
-        let entry_outcome = run_entry(kind, language, &name, &action_path, result.as_deref(), &base_iri, manifest_dir);
+        let entry_outcome = run_entry(
+            kind,
+            language,
+            &name,
+            &action_path,
+            result.as_deref(),
+            &base_iri,
+            manifest_dir,
+            assumed_test_base.as_deref(),
+        );
         if entry_outcome.pass {
             summary.pass += 1;
         } else {
@@ -229,6 +250,7 @@ pub(crate) fn run_manifest(
 }
 
 /// Execute a single classified entry and return its outcome.
+#[allow(clippy::too_many_arguments)]
 fn run_entry(
     kind: TestKind,
     language: &str,
@@ -237,6 +259,7 @@ fn run_entry(
     result_iri: Option<&str>,
     base_iri: &str,
     manifest_dir: &Path,
+    assumed_test_base: Option<&str>,
 ) -> EntryOutcome {
     let action_bytes = match fs::read(action_path) {
         Ok(b) => b,
@@ -251,7 +274,26 @@ fn run_entry(
         }
     };
 
-    let parse_main = parse_for_language(language, &action_bytes);
+    // The `mf:assumedTestBase` retrieval URL is only meaningful for
+    // positive-syntax and eval tests whose action fixtures use relative
+    // IRIs. Negative-syntax / negative-eval tests are deliberately
+    // malformed — seeding a base there could accidentally turn a
+    // relative-IRI-rejection failure into a spurious parse success. The
+    // W3C manifests don't use `mf:assumedTestBase` on negative entries.
+    //
+    // The manifest-level `mf:assumedTestBase` is a directory URL; the
+    // per-entry retrieval URL is `assumedTestBase + <action-filename>`.
+    // The distinction matters for fragment references (`<#x>` resolves
+    // against the file URL, not the directory URL). See
+    // `docs/spec-readings/turtle/base-undeclared.md` and the W3C
+    // `turtle-subm-01` expected output.
+    let seeded_base: Option<String> = match kind {
+        TestKind::PositiveSyntax | TestKind::Eval => {
+            assumed_test_base.map(|dir| concat_retrieval_url(dir, action_path))
+        }
+        TestKind::NegativeSyntax | TestKind::NegativeEval => None,
+    };
+    let parse_main = parse_for_language(language, &action_bytes, seeded_base.as_deref());
 
     match kind {
         TestKind::PositiveSyntax => match parse_main {
@@ -362,7 +404,10 @@ fn run_eval(
             _ => "nt",
         },
     };
-    let expected = match parse_for_language(expected_parser_lang, &result_bytes) {
+    // The expected N-Triples / N-Quads output is always written with
+    // absolute IRIs per the W3C convention, so no base IRI is threaded
+    // through here.
+    let expected = match parse_for_language(expected_parser_lang, &result_bytes, None) {
         Ok(o) => o.facts,
         Err(msg) => {
             return EntryOutcome {
@@ -403,17 +448,30 @@ fn run_eval(
     }
 }
 
-/// Parse `input` through the main parser selected by `language`. Returns
-/// a human-readable error message on rejection (the caller only cares
-/// about the accept/reject split plus the fact set on accept).
-fn parse_for_language(language: &str, input: &[u8]) -> Result<ParseOutcome, String> {
+/// Parse `input` through the main parser selected by `language`, with an
+/// optional base IRI supplied by the caller (e.g. the manifest's
+/// `mf:assumedTestBase`). Returns a human-readable error message on
+/// rejection (the caller only cares about the accept/reject split plus
+/// the fact set on accept).
+///
+/// The base IRI is only honoured by `ttl` / `trig`; N-Triples / N-Quads
+/// are absolute-IRI formats, so the base parameter is ignored there.
+fn parse_for_language(
+    language: &str,
+    input: &[u8],
+    base: Option<&str>,
+) -> Result<ParseOutcome, String> {
     match language {
-        "ttl" => TurtleParser::new()
-            .parse(input)
-            .map_err(|d| format_diag(&d.messages)),
-        "trig" => TriGParser::new()
-            .parse(input)
-            .map_err(|d| format_diag(&d.messages)),
+        "ttl" => {
+            let p = TurtleParser::new();
+            base.map_or_else(|| p.parse(input), |b| p.parse_with_base(input, b))
+                .map_err(|d| format_diag(&d.messages))
+        }
+        "trig" => {
+            let p = TriGParser::new();
+            base.map_or_else(|| p.parse(input), |b| p.parse_with_base(input, b))
+                .map_err(|d| format_diag(&d.messages))
+        }
         "nt" => NTriplesParser
             .parse(input)
             .map_err(|d| format_diag(&d.messages)),
@@ -422,6 +480,56 @@ fn parse_for_language(language: &str, input: &[u8]) -> Result<ParseOutcome, Stri
             .map_err(|d| format_diag(&d.messages)),
         other => Err(format!("no main parser registered for language `{other}`")),
     }
+}
+
+/// Build the per-entry retrieval URL from the manifest-level
+/// `mf:assumedTestBase` directory URL and the action fixture's on-disk
+/// path. The result is the URL the W3C suite would serve the fixture
+/// from — the natural base IRI for fragment references inside the
+/// fixture.
+fn concat_retrieval_url(dir_base: &str, action_path: &Path) -> String {
+    let fname = action_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    if dir_base.ends_with('/') {
+        format!("{dir_base}{fname}")
+    } else {
+        format!("{dir_base}/{fname}")
+    }
+}
+
+/// Pull `mf:assumedTestBase` off the manifest subject, if present. The
+/// triple is emitted once per manifest file (not per entry); multiple
+/// values are tolerated by taking the lexicographically-first so the
+/// behaviour is deterministic.
+///
+/// The value is an IRI, so we strip the `<…>` wrapping applied by the
+/// canonicaliser. A literal (e.g. `"http://…"^^xsd:anyURI`) is equally
+/// valid per the test-manifest ontology; that form is also tolerated.
+fn extract_assumed_test_base(
+    index: &BTreeMap<(String, String), Vec<String>>,
+    predicate: &str,
+) -> Option<String> {
+    // There is no single manifest subject we can key off of — different
+    // W3C manifests use `<>` (self), `trs:manifest`, or a versioned IRI
+    // — so scan every subject for the predicate.
+    let mut candidates: Vec<String> = Vec::new();
+    for ((_, p), objs) in index {
+        if p == predicate {
+            for o in objs {
+                if let Some(inner) = o.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
+                    candidates.push(inner.to_owned());
+                } else if o.starts_with('"') {
+                    // Datatyped literal form — strip quotes, drop any
+                    // `^^<…>` suffix we don't care about here.
+                    candidates.push(strip_literal(o).to_owned());
+                }
+            }
+        }
+    }
+    candidates.sort();
+    candidates.into_iter().next()
 }
 
 fn format_diag(messages: &[String]) -> String {

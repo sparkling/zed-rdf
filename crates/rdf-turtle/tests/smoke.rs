@@ -307,6 +307,76 @@ fn base_and_sparql_base_replacement() {
     assert_eq!(f[0].predicate, "<http://b/p>");
 }
 
+// TTL-DIR-001 strict reading: SPARQL-style `PREFIX` / `BASE` must NOT be
+// terminated by `.` (Turtle §6.5 productions `sparqlPrefix` /
+// `sparqlBase`). Pin: docs/spec-readings/turtle/directive-terminator.md.
+#[test]
+fn sparql_base_with_trailing_dot_rejected() {
+    let d = reject_ttl("BASE <http://a/> .\n<rel> <p> <o> .");
+    let joined = d.messages.join("\n");
+    assert!(
+        joined.contains("SPARQL-style"),
+        "expected DirectiveTerminator rejection, got: {joined}",
+    );
+}
+
+#[test]
+fn sparql_prefix_with_trailing_dot_rejected() {
+    let d = reject_ttl("PREFIX ex: <http://a/> .\nex:s ex:p ex:o .");
+    let joined = d.messages.join("\n");
+    assert!(
+        joined.contains("SPARQL-style"),
+        "expected DirectiveTerminator rejection, got: {joined}",
+    );
+}
+
+// Harness-level base-IRI plumbing — `parse_with_base` seeds the base IRI
+// slot before parsing. Closes class G (TTL-BASE-001) of the
+// verification-v1 allow-list.
+#[test]
+fn parse_with_base_resolves_relative_iri() {
+    let out = TurtleParser::new()
+        .parse_with_base(
+            b"<rel> <p> <o> .\n",
+            "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-turtle/syntax/",
+        )
+        .expect("accept");
+    let f: Vec<Fact> = out.facts.set.keys().cloned().collect();
+    assert_eq!(
+        f[0].subject,
+        "<https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-turtle/syntax/rel>",
+    );
+}
+
+#[test]
+fn parse_with_base_overridden_by_inline_base_directive() {
+    // An `@base` or `BASE` inside the document still replaces the
+    // externally-supplied seed per Turtle §6.5.
+    let out = TurtleParser::new()
+        .parse_with_base(
+            b"@base <http://inside/> .\n<rel> <p> <o> .\n",
+            "http://outside/",
+        )
+        .expect("accept");
+    let f: Vec<Fact> = out.facts.set.keys().cloned().collect();
+    assert_eq!(f[0].subject, "<http://inside/rel>");
+}
+
+#[test]
+fn parse_with_base_trig_resolves_relative_graph_name() {
+    let out = TriGParser::new()
+        .parse_with_base(
+            b"<g> { <s> <p> <o> . }\n",
+            "http://graph-base/",
+        )
+        .expect("accept");
+    let facts: Vec<Fact> = out.facts.set.keys().cloned().collect();
+    assert!(
+        facts.iter().all(|t| t.graph.as_deref() == Some("<http://graph-base/g>")),
+        "graph name should resolve against the seeded base, got: {facts:?}",
+    );
+}
+
 // ---------------------------------------------------------------------
 // Trailing semicolon
 // ---------------------------------------------------------------------

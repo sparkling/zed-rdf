@@ -4,12 +4,12 @@ Owner: `pa-w3c-vendor`. Captures divergences surfaced by running the
 `xtask verify` harness against the vendored W3C `rdf-turtle` suite
 (see `external/tests/PINS.md`).
 
-## Current state (post-triage, 2026-04-19)
+## Current state (post-triage, 2026-04-19 — allow-list closed)
 
 - Corpus root: `external/tests/ttl/`
 - Files discovered: 433
 - Harness mode: **live** (`rdf-turtle::TurtleParser` driving `rdf-diff`).
-- `xtask verify` outcome: 626 entries, **590 pass / 36 divergences / 36 allow-listed** → pass-rate including allow-listed **100 %**.
+- `xtask verify` outcome: 626 entries, **626 pass / 0 divergences / 0 allow-listed** → strict pass-rate **100 %**.
 - Workspace: `cargo test --workspace --all-features --no-fail-fast` green; `cargo clippy --workspace --all-features -- -D warnings` clean.
 
 ## Class taxonomy
@@ -77,19 +77,36 @@ that matches neither a keyword nor a pname is a hard syntax error.
 
 Member test-ids: `turtle-subm-02` (and by cascade the TriG mirror).
 
-### G. TTL-BASE-001 relative IRIs without a harness-supplied base — **ALLOW-LISTED**
+### G. TTL-BASE-001 relative IRIs without a harness-supplied base — **CLOSED**
 
-Thirty-four TTL tests (17 unique, seen once per manifest pass) use
+Thirty-four TTL entries (17 unique, seen once per manifest pass) use
 relative IRIs and rely on the manifest's `mf:assumedTestBase` to serve
-as the in-scope base IRI. Our `xtask verify` harness currently passes
+as the in-scope base IRI. The `xtask verify` harness previously passed
 the raw action bytes to `rdf-turtle::TurtleParser` without a synthetic
-`@base` prefix, so the parser correctly rejects per the pin in
+base, so the parser correctly rejected per the pin in
 `docs/spec-readings/turtle/base-undeclared.md` (TTL-BASE-001).
 
-Retirement: wire `mf:assumedTestBase + action-filename` into
-`parse_for_language` for `ttl` / `trig`. See
-`crates/testing/rdf-diff/ALLOWLIST.md` → "Turtle / TriG — harness-level
-base IRI not supplied" for the exhaustive list and rationale.
+Closed on 2026-04-19 by:
+
+1. Adding `TurtleParser::parse_with_base` / `TriGParser::parse_with_base`
+   as inherent methods that seed the parser's base-IRI slot before
+   `parse_document()` runs. The `rdf_diff::Parser::parse` contract is
+   unchanged — it still means "no external base".
+2. Threading `mf:assumedTestBase` through `xtask/verify/src/manifest.rs`:
+   `extract_assumed_test_base` pulls the triple off the manifest during
+   manifest parse, and `run_entry` concats it with the action filename
+   (via `concat_retrieval_url`) before passing to `parse_for_language`.
+   Only positive-syntax and eval kinds receive the seed — negative-*
+   tests are deliberately malformed and must not be given free relative-
+   IRI resolution.
+
+Additional bug surfaced and fixed during the closure: W3C
+`turtle-syntax-number-11` (`123.E+1 .`) exercised the Turtle §6.5
+`DOUBLE ::= [0-9]+ '.' [0-9]* EXPONENT` branch with zero digits after
+the dot. The lexer's `lex_number` only consumed a `.` when followed by
+a digit, mis-classifying the `.` as a statement terminator. Extended
+the predicate to also consume `.` when the lookahead is an
+`e`/`E` and at least one leading digit has been seen.
 
 Member test-ids (TTL, 17):
 
@@ -98,42 +115,42 @@ Member test-ids (TTL, 17):
 - `turtle-syntax-kw-01`, `turtle-syntax-kw-02`
 - `turtle-syntax-number-01` … `turtle-syntax-number-11` (11)
 
-### H. Tolerant trailing `.` after SPARQL PREFIX/BASE — **ALLOW-LISTED**
+### H. Tolerant trailing `.` after SPARQL PREFIX/BASE — **CLOSED**
 
-Turtle §6.4 says SPARQL-style `PREFIX` / `BASE` do **not** take a `.`
+Turtle §6.5 says SPARQL-style `PREFIX` / `BASE` do **not** take a `.`
 terminator; W3C tests `turtle-syntax-bad-base-03` and
-`turtle-syntax-bad-prefix-05` exercise this as negative syntax. Our
-parser accepts a stray `.` in this position for backward compatibility
-with the in-repo adversary fixture
+`turtle-syntax-bad-prefix-05` exercise this as negative syntax. The
+parser previously accepted a stray `.` in this position for backward
+compatibility with the in-repo adversary fixture
 `crates/testing/rdf-diff/tests/adversary-ttl/fm6-base-directive-replacement.ttl`,
 which was authored with a trailing dot.
 
-Retirement: either drop the stray `.` from the fm6 fixture (its
-grammar claim is about directive replacement, not termination) or
-split the tolerant path behind a feature flag.
+Closed on 2026-04-19 by:
+
+1. Amending the fm6 fixture to drop the stray `.` after `BASE <…>` —
+   the fixture's grammar claim is about directive *replacement*, not
+   the terminator.
+2. Replacing the tolerant `consume_if_dot` call in `grammar.rs`'s
+   `directive_prefix` / `directive_base` with a new `reject_dot`
+   helper that emits `DirectiveTerminator` when the next token is `.`
+   after a SPARQL-style directive.
+3. Updating the spec-reading pin in
+   `docs/spec-readings/turtle/directive-terminator.md` to document the
+   strict reading.
 
 Member test-ids: `turtle-syntax-bad-base-03`, `turtle-syntax-bad-prefix-05`.
 
 ## Tally
 
-| class | count | status         |
-| ----- | ----- | -------------- |
-| B     | 6     | fixed          |
-| E     | 2     | fixed          |
-| F     | 2     | fixed          |
-| G     | 34    | allow-listed   |
-| H     | 4     | allow-listed   |
-
-Parser bugs fixed in this pass: **8 TTL divergences across 9 W3C test
-names** (the B cluster fixed `[ :p :o ]` as subject across six
-positive-syntax tests plus collapse the nested bnode-property-list
-cases that previously failed as part of the same class).
-
-Additionally, Class C (TriG-only in the diff report — bnode / empty-
-bnode graph names and last-triple trailing-dot-optional) is documented
-in the TriG divergence log and shares parser-bug fixes in this pass.
+| class | count | status                                  |
+| ----- | ----- | --------------------------------------- |
+| B     | 6     | fixed                                   |
+| E     | 2     | fixed                                   |
+| F     | 2     | fixed                                   |
+| G     | 34    | closed (harness + number-lexer fix)     |
+| H     | 4     | closed (fixture + strict grammar)       |
 
 ## Deferred
 
-None in the parser itself. The allow-listed entries are pending
-retirement via the respective harness / fixture fix-ups noted above.
+None. The verification-v1 Phase-A exit gate reports zero divergences
+and zero allow-listed entries for TTL.

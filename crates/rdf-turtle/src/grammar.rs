@@ -91,6 +91,15 @@ impl<'a> Parser<'a> {
         (self.out, self.prefixes)
     }
 
+    /// Seed the base-IRI slot before `parse_document()`. An `@base` or
+    /// SPARQL-style `BASE` directive in the input still overrides per
+    /// Turtle §6.5 — this just supplies the starting value when the
+    /// input has none, mirroring the retrieval-URL behaviour the W3C
+    /// manifests encode as `mf:assumedTestBase`.
+    pub(crate) fn set_initial_base(&mut self, base: &str) {
+        self.base = Some(base.to_owned());
+    }
+
     /// Drive the top-level production `statement*`.
     pub(crate) fn parse_document(&mut self) -> Result<(), Diag> {
         loop {
@@ -139,13 +148,12 @@ impl<'a> Parser<'a> {
         };
         self.prefixes.insert(prefix_name, iri);
         if sparql_style {
-            // SPARQL-style `PREFIX` has no `.` terminator per Turtle §6.4
-            // (production `sparqlPrefix`). We accept a stray `.` for
-            // backward compatibility with the `adversary-ttl/fm6-…`
-            // fixture corpus (authored before the strict reading). The
-            // divergence surface is covered by allow-list entries for
-            // W3C `turtle-syntax-bad-prefix-05` / `trig-syntax-bad-prefix-05`.
-            self.consume_if_dot();
+            // SPARQL-style `PREFIX` has NO `.` terminator per Turtle §6.5
+            // (production `sparqlPrefix ::= "PREFIX" PNAME_NS IRIREF`).
+            // W3C `turtle-syntax-bad-prefix-05` / `trig-syntax-bad-prefix-05`
+            // pin the strict reading: a `.` following `PREFIX <iri>` is a
+            // syntax error. Pin: docs/spec-readings/turtle/directive-terminator.md.
+            self.reject_dot(kw.start)?;
         } else {
             self.expect_dot(kw.start)?;
         }
@@ -164,22 +172,40 @@ impl<'a> Parser<'a> {
         };
         self.base = Some(iri);
         if sparql_style {
-            // See `directive_prefix` — tolerant of a stray `.`. Covered
-            // by allow-list for W3C `turtle-syntax-bad-base-03`.
-            self.consume_if_dot();
+            // SPARQL-style `BASE` has NO `.` terminator per Turtle §6.5
+            // (production `sparqlBase ::= "BASE" IRIREF`). W3C
+            // `turtle-syntax-bad-base-03` / `trig-syntax-bad-base-03` pin
+            // the strict reading. Pin:
+            // docs/spec-readings/turtle/directive-terminator.md.
+            self.reject_dot(kw.start)?;
         } else {
             self.expect_dot(kw.start)?;
         }
         Ok(())
     }
 
-    /// Consume a `.` token if the next token is one; otherwise a no-op.
-    fn consume_if_dot(&mut self) {
+    /// Reject a `.` immediately following a SPARQL-style `PREFIX` / `BASE`
+    /// directive. If the lookahead is not a `.`, this is a no-op (the
+    /// outer loop will consume whatever the next token is as the start of
+    /// a new statement). If it *is* a `.`, emit `DirectiveTerminator` so
+    /// the error surface matches the `@`-prefixed forms.
+    fn reject_dot(&mut self, anchor: usize) -> Result<(), Diag> {
         let save = self.lex.offset();
-        match self.lex.next() {
-            Ok(Some(Spanned { tok: Tok::Dot, .. })) => {}
-            _ => self.lex.seek(save),
+        let peek = self.lex.peek()?;
+        if matches!(peek.as_ref().map(|s| &s.tok), Some(Tok::Dot)) {
+            let dot = self.lex.next()?;
+            let off = dot.as_ref().map_or(anchor, |s| s.start);
+            return Err(Diag {
+                code: DiagnosticCode::DirectiveTerminator,
+                message: "SPARQL-style PREFIX/BASE directive must not end with '.'".into(),
+                offset: off,
+                fatal: true,
+            });
         }
+        // No dot — restore offset (peek doesn't advance, but keep the
+        // explicit seek for defensive symmetry with future edits).
+        self.lex.seek(save);
+        Ok(())
     }
 
     fn expect_dot(&mut self, anchor: usize) -> Result<(), Diag> {

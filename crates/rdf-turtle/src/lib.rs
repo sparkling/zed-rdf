@@ -77,13 +77,37 @@ impl TurtleParser {
     pub const fn new() -> Self {
         Self
     }
+
+    /// Parse `input` with an externally-supplied base IRI seeded into the
+    /// parser's base-IRI slot before `@base` / `BASE` directives get a
+    /// chance to override it.
+    ///
+    /// Intended for harness callers that know the retrieval URL of a
+    /// fixture (e.g. the W3C manifests' `mf:assumedTestBase`) when the
+    /// fixture itself omits a `@base` / `BASE` directive. Directives
+    /// inside the input still replace the seeded base per Turtle §6.5
+    /// (`base` / `sparqlBase` productions). This method is additive —
+    /// the frozen [`rdf_diff::Parser::parse`] contract keeps
+    /// "no external base" semantics.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the same diagnostics as [`rdf_diff::Parser::parse`]
+    /// ([`Diagnostics`]).
+    pub fn parse_with_base(
+        &self,
+        input: &[u8],
+        base: &str,
+    ) -> Result<ParseOutcome, Diagnostics> {
+        parse_with(input, Dialect::Turtle, TURTLE_ID, Some(base))
+    }
 }
 
 const TURTLE_ID: &str = "rdf-turtle";
 
 impl rdf_diff::Parser for TurtleParser {
     fn parse(&self, input: &[u8]) -> Result<ParseOutcome, Diagnostics> {
-        parse_with(input, Dialect::Turtle, TURTLE_ID)
+        parse_with(input, Dialect::Turtle, TURTLE_ID, None)
     }
 
     fn id(&self) -> &'static str {
@@ -101,13 +125,29 @@ impl TriGParser {
     pub const fn new() -> Self {
         Self
     }
+
+    /// TriG analogue of [`TurtleParser::parse_with_base`] — seed a base
+    /// IRI before the inner parser runs, so relative IRIs resolve even
+    /// when the fixture omits a `@base` / `BASE` directive.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the same diagnostics as [`rdf_diff::Parser::parse`]
+    /// ([`Diagnostics`]).
+    pub fn parse_with_base(
+        &self,
+        input: &[u8],
+        base: &str,
+    ) -> Result<ParseOutcome, Diagnostics> {
+        parse_with(input, Dialect::TriG, TRIG_ID, Some(base))
+    }
 }
 
 const TRIG_ID: &str = "rdf-trig";
 
 impl rdf_diff::Parser for TriGParser {
     fn parse(&self, input: &[u8]) -> Result<ParseOutcome, Diagnostics> {
-        parse_with(input, Dialect::TriG, TRIG_ID)
+        parse_with(input, Dialect::TriG, TRIG_ID, None)
     }
 
     fn id(&self) -> &'static str {
@@ -119,8 +159,12 @@ fn parse_with(
     input: &[u8],
     dialect: Dialect,
     parser_id: &'static str,
+    base: Option<&str>,
 ) -> Result<ParseOutcome, Diagnostics> {
     let mut inner = Inner::new(input, dialect, parser_id);
+    if let Some(b) = base {
+        inner.set_initial_base(b);
+    }
     if let Err(diag) = inner.parse_document() {
         return Err(Diagnostics {
             messages: vec![diag.render()],

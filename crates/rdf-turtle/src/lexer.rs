@@ -585,9 +585,26 @@ impl<'a> Lexer<'a> {
             has_digit_before_dot = true;
         }
         if self.pos < self.src.len() && self.src[self.pos] == b'.' {
-            // Only a decimal literal if at least one digit follows.
+            // Per Turtle §6.5:
+            //   DOUBLE  ::= [+-]? ([0-9]+ '.' [0-9]* EXPONENT
+            //                    | '.' [0-9]+ EXPONENT
+            //                    | [0-9]+ EXPONENT)
+            //   DECIMAL ::= [+-]? [0-9]* '.' [0-9]+
+            //
+            // So a `.` after the leading digit-run consumes as part of the
+            // numeric token iff it's followed by either:
+            //   (a) a digit (`123.45` → decimal, `123.45e2` → double), or
+            //   (b) an `e`/`E` with the leading digits already present
+            //       (`123.E+1` / `123.e2` → double).
+            // Otherwise the `.` is the statement terminator and the caller
+            // emits an integer. W3C `turtle-syntax-number-11` pins (b).
             let after_dot = self.src.get(self.pos + 1).copied();
-            if after_dot.is_some_and(|c| c.is_ascii_digit()) {
+            let consume_dot = match after_dot {
+                Some(c) if c.is_ascii_digit() => true,
+                Some(b'e' | b'E') if has_digit_before_dot => true,
+                _ => false,
+            };
+            if consume_dot {
                 has_dot = true;
                 self.pos += 1;
                 while self.pos < self.src.len() && self.src[self.pos].is_ascii_digit() {

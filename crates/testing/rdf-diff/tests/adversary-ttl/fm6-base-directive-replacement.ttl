@@ -12,8 +12,12 @@
 # Divergence signal: ObjectMismatch or FactOnlyIn if the base is wrong.
 #
 # Spec: Turtle §2.2 — "The base URI is updated for each occurrence."
-# SPARQL-style BASE added in RDF 1.1 Turtle.
+# SPARQL-style BASE added in RDF 1.1 Turtle. Note: per Turtle §6.5, the
+# SPARQL-style `BASE <iri>` production has no trailing `.` (unlike the
+# `@base <iri> .` form); this fixture therefore omits the dot after the
+# SPARQL-style directive so the grammar claim stays on "replacement, not
+# accumulation" rather than accidentally asserting terminator tolerance.
 
 @base <http://example/a/> .
-BASE <http://example/b/> .
+BASE <http://example/b/>
 <rel> <p> <o> .

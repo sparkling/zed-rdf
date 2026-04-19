@@ -2,12 +2,12 @@
 
 Owner: `pa-w3c-vendor`.
 
-## Current state (post-triage, 2026-04-19)
+## Current state (post-triage, 2026-04-19 — allow-list closed)
 
 - Corpus root: `external/tests/trig/`
 - Files discovered: 470
 - Harness mode: **live** (`rdf-turtle::TriGParser` driving `rdf-diff`).
-- `xtask verify` outcome: 712 entries, **676 pass / 36 divergences / 36 allow-listed** → pass-rate including allow-listed **100 %**.
+- `xtask verify` outcome: 712 entries, **712 pass / 0 divergences / 0 allow-listed** → strict pass-rate **100 %**.
 - Workspace: `cargo test --workspace --all-features --no-fail-fast` green; `cargo clippy --workspace --all-features -- -D warnings` clean.
 
 ## Class taxonomy
@@ -98,11 +98,16 @@ Member test-ids: `trig-syntax-bad-list-01` … `trig-syntax-bad-list-04`.
 
 Inherits the TTL F fix. Member test-id: `trig-subm-02`.
 
-### G. TTL-BASE-001 relative IRIs without harness base — **ALLOW-LISTED**
+### G. TTL-BASE-001 relative IRIs without harness base — **CLOSED**
 
 Same story as the TTL G class. 17 unique TriG tests (34 entries due to
-double manifest pass) need `mf:assumedTestBase` in the harness. Listed
-in `crates/testing/rdf-diff/ALLOWLIST.md`.
+double manifest pass) needed `mf:assumedTestBase` threading in the
+harness. Closed on 2026-04-19 by the same two-part change:
+`TriGParser::parse_with_base` added as an inherent method, and
+`xtask/verify/src/manifest.rs` wires the manifest-level
+`mf:assumedTestBase` plus the action filename through to
+`parse_for_language`. See `../ttl/w3c-divergences.md` → class G for
+the full rationale.
 
 Member test-ids (TriG, 17):
 
@@ -111,29 +116,28 @@ Member test-ids (TriG, 17):
 - `trig-syntax-kw-01`, `trig-syntax-kw-02`
 - `trig-syntax-number-01` … `trig-syntax-number-11`
 
-### H. Tolerant trailing `.` after SPARQL PREFIX/BASE — **ALLOW-LISTED**
+### H. Tolerant trailing `.` after SPARQL PREFIX/BASE — **CLOSED**
 
-Mirror of the TTL H class.
+Mirror of the TTL H class — closed on 2026-04-19 by the same grammar
+tightening. `rdf-turtle`'s `directive_prefix` / `directive_base` now
+emit `DirectiveTerminator` for a stray `.` after `PREFIX <iri>` /
+`BASE <iri>`. See `../ttl/w3c-divergences.md` → class H.
 
 Member test-ids: `trig-syntax-bad-base-03`, `trig-syntax-bad-prefix-05`.
 
 ## Tally
 
-| class | count | status         |
-| ----- | ----- | -------------- |
-| C1    | 14    | fixed          |
-| C2    | 4     | fixed          |
-| C3    | 16    | fixed          |
-| C4    | 8     | fixed (negative path restored) |
-| C5    | 2     | fixed          |
-| G     | 34    | allow-listed   |
-| H     | 4     | allow-listed   |
-
-Parser bugs fixed in this pass: **44 TriG divergences** (down from
-86), leaving only the 36 harness-deferred / fixture-deferred entries
-that ride the allow-list.
+| class | count | status                                  |
+| ----- | ----- | --------------------------------------- |
+| C1    | 14    | fixed                                   |
+| C2    | 4     | fixed                                   |
+| C3    | 16    | fixed                                   |
+| C4    | 8     | fixed (negative path restored)          |
+| C5    | 2     | fixed                                   |
+| G     | 34    | closed (harness wired)                  |
+| H     | 4     | closed (fixture + strict grammar)       |
 
 ## Deferred
 
-None in the parser itself. Allow-listed entries retire when the harness
-(for G) or the adversary fixture (for H) is updated.
+None. The verification-v1 Phase-A exit gate reports zero divergences
+and zero allow-listed entries for TriG.
