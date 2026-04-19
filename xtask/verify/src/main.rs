@@ -1,41 +1,44 @@
 //! `cargo run -p xtask -- verify` — the PR-gate entry point for the
 //! verification-v1 sweep.
 //!
-//! Behaviour (ADR-0020 §3, `v1-ci-wiring`):
+//! Behaviour (ADR-0020 §3, `v1-ci-wiring` + Phase-A `pa-manifest-runner`):
 //!
-//! 1. Discover format corpora — W3C manifests and edge-case inputs under
-//!    `external/tests/<lang>/**` plus the smoke-fixture fallback under
-//!    `external/fact-oracles/fixtures/smoke/<lang>/**` when the vendored
-//!    suite is not present.
-//! 2. Discover oracle JSON fact corpora under `external/fact-oracles/<lang>/*.json`
-//!    (materialised out-of-process by the `fact-oracles.yml` workflow —
-//!    **no JVM runs here**; JSON is consumed as data).
-//! 3. Resolve the main + shadow Rust parsers registered in the
-//!    `crates/testing/rdf-diff-oracles` crate (when landed by
-//!    `v1-oracle-rust`) and run the diff harness from
-//!    `rdf-diff::diff_many`. Until that crate lands, `xtask` runs in
-//!    *harness-stub* mode: it still enumerates corpora and oracles, emits
-//!    per-format `DiffReport`s, and exits 0 on a smoke fixture so the PR
-//!    gate on `main` is green during the v1 sweep's own bootstrap.
-//! 4. Emit one `DiffReport` JSON per format + a `summary.json` under
-//!    `target/verification-reports/`. The workflow uploads this tree as a
-//!    build artifact on failure (`.github/workflows/verification.yml`).
+//! 1. Discover format corpora — W3C manifests under
+//!    `external/tests/<lang>/manifest.ttl` (the pa-w3c-vendor contract)
+//!    or, as a fallback, any `manifest.ttl` anywhere under
+//!    `external/tests/**` that matches the W3C rdf-tests directory-name
+//!    conventions (`rdf-turtle`, `rdf-n-triples`, …). Edge-case inputs
+//!    plus the smoke-fixture fallback under
+//!    `external/fact-oracles/fixtures/smoke/<lang>/**` are still
+//!    enumerated for report provenance.
+//! 2. Discover oracle JSON fact corpora under
+//!    `external/fact-oracles/<lang>/*.json` (materialised out-of-process
+//!    by the `fact-oracles.yml` workflow — **no JVM runs here**; JSON is
+//!    consumed as data).
+//! 3. Drive every classified manifest entry through the matching main
+//!    parser (`rdf_turtle::TurtleParser` / `TriGParser`,
+//!    `rdf_ntriples::NTriplesParser` / `NQuadsParser`) and the
+//!    `rdf_diff` harness. Positive-syntax entries assert accept,
+//!    negative-syntax assert reject, eval entries diff the action's
+//!    canonical facts against the parsed `mf:result` expected output.
+//! 4. Emit one `DiffReport` JSON per format, a `summary.json`, and a
+//!    Phase-A exit-gate report at
+//!    `target/verification-reports/phase-a-exit-gate.json`. The workflow
+//!    uploads this tree as a build artifact on failure
+//!    (`.github/workflows/verification.yml`).
 //! 5. Exit non-zero on any non-allow-listed divergence. Allow-list file
 //!    path: `crates/testing/rdf-diff/ALLOWLIST.md` (ADR-0019 §2).
 //!
-//! Phase-A main-parser note (`phaseA-tester`, ADR-0017 §4): the main
-//! parsers (`rdf-iri::Iri` / `IriParser`, `rdf-ntriples::NTriplesParser`
-//! / `NQuadsParser`, `rdf-turtle::TurtleParser` / `TriGParser`) are
-//! expected to be registered by `rdf-diff-oracles` alongside the shadow
-//! crates and the JSON-oracle adapters. Each is still added behind a
-//! separate feature flag so that any one crate's landing can be
-//! integrated without blocking the others. Until all three land and
-//! `rdf-diff-oracles` declares path-deps on them, `verify_language`
-//! continues to run in stub mode for every language. ADR-0019
-//! §Validation reminds us that zero divergences on Phase-A inputs is
-//! *suspicious*; the stub-mode clean report is acceptable only because
-//! `stub_reason` is emitted alongside it — a downstream reader can
-//! distinguish "ran clean" from "did not run".
+//! Exit-gate matrix (ADR-0020 §Acceptance, `pa-manifest-runner`):
+//!
+//! | Condition                                                    | Exit |
+//! |--------------------------------------------------------------|------|
+//! | `smoke=true`                                                 | 0    |
+//! | `smoke=false`, no tests ran (manifests absent)               | 1    |
+//! | `smoke=false`, manifests ran, zero divergences               | 0    |
+//! | `smoke=false`, divergences but all allow-listed              | 0 + warn |
+//! | `smoke=false`, positive-syntax rejected or negative accepted | 1    |
+//! | `smoke=false`, other non-allow-listed divergence             | 1    |
 //!
 //! Deliberate non-features:
 //!
@@ -44,57 +47,33 @@
 //! - No `serde`/`serde_json` dependency — we serialise summary/report
 //!   JSON by hand so the xtask graph stays minimal and does not risk
 //!   pulling any banned crate transitively (ADR-0019 §1, `deny.toml`).
-//! - No dependency on shadow crates at compile time: we load them via
-//!   the frozen `rdf-diff::Parser` trait through the `rdf-diff-oracles`
-//!   registry.
+//! - No dependency on shadow crates at compile time: shadow parsers
+//!   remain behind the optional `shadow-*` features.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 // pedantic lint carve-outs kept narrow to the bits this single-file
 // driver genuinely trips on.
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::too_many_lines,
+    clippy::missing_errors_doc,
+    clippy::module_name_repetitions
+)]
 
+mod manifest;
+
+use std::collections::BTreeSet;
 use std::env;
 use std::ffi::OsStr;
-use std::fs;
 use std::fmt::Write as _;
+use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-// NB: during the v1 bootstrap the xtask does **not** take a path
-// dependency on `rdf-diff` — see this crate's Cargo.toml for the
-// rationale. The shapes below are a local, read-only mirror of the
-// subset of `rdf-diff`'s public API that the gate summary surfaces.
-// When `v1-diff-core` lands the real diff, the integration-pass patch
-// replaces these with `use rdf_diff::{DiffReport, Divergence};` and
-// drops the shim.
-
-/// Local mirror of `rdf_diff::DiffReport`. Structural equivalence only —
-/// must be kept in sync with `crates/testing/rdf-diff/src/lib.rs` until
-/// xtask takes the path-dep in ADR-0020 §5's integration pass.
-#[derive(Default)]
-struct DiffReport {
-    divergences: Vec<Divergence>,
-    triage_hint: String,
-}
-
-impl DiffReport {
-    const fn is_clean(&self) -> bool {
-        self.divergences.is_empty()
-    }
-}
-
-/// Local mirror of `rdf_diff::Divergence`. Only the variant *names* are
-/// surfaced in the report JSON; the full payload lands with the harness
-/// integration in §5. Kept `#[allow(dead_code)]` because stub-mode never
-/// constructs any variant.
-#[allow(dead_code)]
-enum Divergence {
-    FactOnlyIn,
-    ObjectMismatch,
-    AcceptRejectSplit,
-}
+use crate::manifest::{EntryOutcome, ManifestSummary, TestKind};
 
 /// Repository-relative paths consulted by `verify`. Centralised so the
 /// CI workflow and the binary agree on layout without a hidden coupling.
@@ -169,18 +148,21 @@ fn run_verify(args: &[String]) -> Result<ExitCode, String> {
         .map_err(|e| format!("cannot create {}: {e}", report_dir.display()))?;
 
     let plan = build_plan(&repo_root, smoke)?;
+    let allowlist = load_allowlist(&repo_root.join(layout::ALLOWLIST));
     let mut summary = Summary {
         smoke: plan.smoke,
         ..Summary::default()
     };
+    let mut gate = ExitGate::default();
 
     for lang in LANGUAGES {
-        let outcome = verify_language(&repo_root, lang, &plan)?;
+        let outcome = verify_language(&repo_root, lang, &plan, &allowlist)?;
         let report_path = report_dir.join(format!("diff-report-{lang}.json"));
         let mut f = fs::File::create(&report_path)
             .map_err(|e| format!("cannot write {}: {e}", report_path.display()))?;
         f.write_all(diff_report_json(lang, &outcome).as_bytes())
             .map_err(|e| format!("cannot write {}: {e}", report_path.display()))?;
+        gate.push(lang, &outcome);
         summary.push(lang, &outcome);
     }
 
@@ -188,30 +170,68 @@ fn run_verify(args: &[String]) -> Result<ExitCode, String> {
     fs::write(&summary_path, summary.to_json())
         .map_err(|e| format!("cannot write {}: {e}", summary_path.display()))?;
 
-    eprintln!(
-        "xtask verify: {} language(s) checked, {} divergence(s), smoke={}",
-        summary.languages_checked, summary.total_divergences, summary.smoke
-    );
+    let gate_path = report_dir.join("phase-a-exit-gate.json");
+    fs::write(&gate_path, gate.to_json())
+        .map_err(|e| format!("cannot write {}: {e}", gate_path.display()))?;
 
+    // Human summary to stderr, matching the gate table in the module
+    // docs so a reader can eyeball-check both.
+    eprintln!(
+        "xtask verify: {} language(s) checked, {} test(s) executed, \
+         {} pass, {} divergence(s) ({} allow-listed), smoke={}",
+        summary.languages_checked,
+        gate.total_executed(),
+        gate.total_pass(),
+        gate.total_divergences(),
+        gate.total_allowlisted(),
+        summary.smoke,
+    );
+    for (lang, counts) in &gate.per_language {
+        if counts.total == 0 {
+            continue;
+        }
+        eprintln!(
+            "xtask verify: [{lang}] total={} pass={} divergences={} allow-listed={}",
+            counts.total, counts.pass, counts.divergences, counts.allowlisted,
+        );
+    }
+
+    // Smoke mode: infrastructure is deliberately stubbed, exit 0
+    // (smoke test integration in `crates/testing/rdf-diff/tests/xtask_verify.rs`).
+    if summary.smoke {
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    // Fail-closed: zero executed tests on a non-smoke run means neither
+    // vendored manifests nor main parsers produced output. The ADR-0019
+    // "zero divergences is suspicious" posture is now sharpened: an
+    // *empty* run is the only suspicious zero, because when the
+    // harness actually runs we have per-entry pass/fail granularity.
+    if gate.total_executed() == 0 {
+        eprintln!(
+            "xtask verify: ERROR — no manifest entries executed on a non-smoke run. \
+             Vendor `external/tests/<lang>/manifest.ttl` or pass `--smoke`."
+        );
+        return Ok(ExitCode::from(1));
+    }
+
+    // Unacceptable failures include accept/reject splits that aren't on
+    // the allow-list and any non-allow-listed divergence.
     if summary.had_unacceptable_failure {
         return Ok(ExitCode::from(1));
     }
 
-    // ADR-0019 §Validation fail-closed: zero divergences on a real
-    // (non-smoke) run is *suspicious*, not success. Zero happens when
-    // either (a) the main parsers + shadows + oracles are not all
-    // wired, or (b) the fixture corpus is empty. Either way, declaring
-    // green would let a broken harness claim the green flag. In smoke
-    // mode zero is fine because the infrastructure is deliberately
-    // stubbed.
-    if !summary.smoke && summary.total_divergences == 0 {
-        eprintln!(
-            "xtask verify: ERROR — zero divergences on a non-smoke run; \
-             per ADR-0019 §Validation this is suspicious, not success. \
-             Check that main parsers + shadows + oracles are wired and \
-             the fixture corpus is non-empty."
-        );
+    if gate.total_divergences() > gate.total_allowlisted() {
+        // Some divergence was neither clean nor allow-listed.
         return Ok(ExitCode::from(1));
+    }
+
+    if gate.total_allowlisted() > 0 {
+        eprintln!(
+            "xtask verify: WARNING — {} divergence(s) allow-listed; \
+             revisit the ALLOWLIST.md before the Phase-A exit gate closes",
+            gate.total_allowlisted(),
+        );
     }
 
     Ok(ExitCode::SUCCESS)
@@ -392,15 +412,14 @@ fn cargo_llvm_cov_installed() -> bool {
 /// The subset of the environment a single `verify` invocation needs.
 struct Plan {
     /// Whether we are running against the smoke fixture (because the
-    /// vendored W3C suite is not present). Controls the exit policy:
-    /// in smoke mode, "harness not yet wired" is not a failure.
+    /// vendored W3C suite is not present or `--smoke` was passed).
+    /// Controls the exit policy: in smoke mode, "no manifests found" is
+    /// not a failure.
     smoke: bool,
-    /// Whether the Rust-side oracle registry (`rdf-diff-oracles`) is
-    /// available. Until `v1-oracle-rust` lands, this is `false` and the
-    /// harness runs in stub mode.
-    rust_oracles_available: bool,
-    /// Allow-list file was located (not parsed — divergence allow-list
-    /// shape is owned by `v1-diff-core`).
+    /// Absolute path of the vendored W3C suite root, when it exists.
+    /// `None` in smoke mode.
+    vendored_root: Option<PathBuf>,
+    /// Allow-list file was located on disk.
     allowlist_present: bool,
 }
 
@@ -415,101 +434,147 @@ fn build_plan(root: &Path, smoke_flag: bool) -> Result<Plan, String> {
             smoke_root.display()
         ));
     }
-    let rust_oracles_available = root
-        .join("crates/testing/rdf-diff-oracles/src/lib.rs")
-        .exists();
     let allowlist_present = root.join(layout::ALLOWLIST).exists();
     Ok(Plan {
         smoke,
-        rust_oracles_available,
+        vendored_root: if smoke { None } else { Some(vendored) },
         allowlist_present,
     })
 }
 
-/// Per-language outcome. Kept narrow so `Summary` can aggregate.
+/// Per-language outcome. Kept narrow so `Summary` and `ExitGate` can aggregate.
 struct LangOutcome {
     /// Paths of corpora consulted (newest-first by mtime is fine — order
     /// is informational).
     corpora: Vec<PathBuf>,
     /// Paths of oracle JSONs consulted.
     oracles: Vec<PathBuf>,
-    /// The `DiffReport` produced by the harness. `None` when the harness
-    /// is not yet wired.
-    report: Option<DiffReport>,
-    /// Human-readable reason when the report is `None`.
+    /// Paths of manifest.ttl files discovered and executed.
+    manifests: Vec<PathBuf>,
+    /// Aggregated manifest-runner summary. `total == 0` means no tests
+    /// ran (either we're in smoke mode or the language has no
+    /// main parser registered yet).
+    summary: ManifestSummary,
+    /// Count of divergences whose `(language, name)` was allow-listed.
+    allowlisted: usize,
+    /// Human-readable reason when no tests ran for this language.
     stub_reason: Option<String>,
     /// Whether this outcome should fail the gate.
     fail_gate: bool,
 }
 
-fn verify_language(root: &Path, lang: &str, plan: &Plan) -> Result<LangOutcome, String> {
+fn verify_language(
+    root: &Path,
+    lang: &str,
+    plan: &Plan,
+    allowlist: &Allowlist,
+) -> Result<LangOutcome, String> {
     let corpora = discover_corpora(root, lang, plan.smoke)?;
     let oracles = discover_oracles(root, lang)?;
 
-    // Without the Rust oracle registry we cannot run the real diff. The
-    // `Parser` trait is frozen in `rdf-diff` but its implementers live
-    // in `rdf-diff-oracles` + the shadow crates — both landed by sibling
-    // agents in the same sweep. Emit an advisory report until then.
-    if !plan.rust_oracles_available {
+    // Smoke mode: don't drive manifests. The xtask remains a
+    // discovery-only sweep so the `xtask_verify_smoke_corpus_green`
+    // integration test stays cheap.
+    let Some(vendored_root) = plan.vendored_root.as_deref() else {
         return Ok(LangOutcome {
             corpora,
             oracles,
-            report: None,
-            stub_reason: Some(
-                "rdf-diff-oracles registry not yet present; harness in stub mode".into(),
-            ),
-            // In smoke mode this is expected bootstrap; in non-smoke it
-            // is also expected during the v1 sweep bootstrap because the
-            // registry-landing agent runs concurrently. The sweep's
-            // *integration pass* (ADR-0020 §5) flips this to real.
+            manifests: Vec::new(),
+            summary: ManifestSummary::default(),
+            allowlisted: 0,
+            stub_reason: Some("smoke mode — W3C manifests not consulted".into()),
+            fail_gate: false,
+        });
+    };
+
+    // Languages without a main parser yet (rdfxml, sparql) run in
+    // discovery-only mode. The report still ships so the gate sees
+    // which formats are pending.
+    if !language_has_main_parser(lang) {
+        return Ok(LangOutcome {
+            corpora,
+            oracles,
+            manifests: Vec::new(),
+            summary: ManifestSummary::default(),
+            allowlisted: 0,
+            stub_reason: Some(format!(
+                "no main parser registered for {lang}; pending Phase-B / Phase-C"
+            )),
             fail_gate: false,
         });
     }
 
-    // The `rdf-diff-oracles` crate exists but we deliberately don't
-    // link it here yet — see `xtask/verify/Cargo.toml`'s dependency
-    // stanza for why. The integration-pass patch in ADR-0020 §5 swaps
-    // the body below for a real call into `rdf_diff::diff_many` driven
-    // by the registry. For now we surface a transparent stub that is
-    // never clean-by-mistake: we emit an empty `DiffReport` but tag
-    // the outcome with a `stub_reason` so the summary JSON (and the
-    // reviewer) can see the gate is not yet load-bearing.
-    // `XTASK_VERIFY_FAIL=1` forces an injected divergence. Used only to
-    // validate the gate's failure path end-to-end during the v1 sweep
-    // ("deliberately-broken shadow" acceptance, ADR-0020 §Acceptance)
-    // before the real harness is wired. Never set in production.
-    let force_fail = env::var_os("XTASK_VERIFY_FAIL").is_some();
-    let mut report = DiffReport::default();
-    if force_fail {
-        report.divergences.push(Divergence::AcceptRejectSplit);
-        report.triage_hint =
-            "XTASK_VERIFY_FAIL=1 set — injected divergence for gate-wiring acceptance test"
-                .to_string();
+    let manifests = manifest::discover_manifests_for_language(vendored_root, lang);
+    if manifests.is_empty() {
+        return Ok(LangOutcome {
+            corpora,
+            oracles,
+            manifests,
+            summary: ManifestSummary::default(),
+            allowlisted: 0,
+            stub_reason: Some(format!(
+                "no manifest.ttl found under {} for language {lang}",
+                vendored_root.display()
+            )),
+            fail_gate: false,
+        });
     }
-    let stub_reason = if force_fail {
-        Some("injected failure via XTASK_VERIFY_FAIL=1".to_string())
-    } else {
-        Some(
-            "rdf-diff-oracles present but xtask path-dep deferred to ADR-0020 §5 integration pass"
-                .to_string(),
-        )
-    };
-    let fail_gate = !report.is_clean() && !allowlisted_equivalent(plan, &report);
+
+    let mut aggregate = ManifestSummary::default();
+    for m in &manifests {
+        match manifest::run_manifest(m, lang) {
+            Ok(s) => aggregate.extend(s),
+            Err(e) => {
+                eprintln!(
+                    "xtask verify: WARNING — manifest {} failed to run: {e}",
+                    m.display()
+                );
+            }
+        }
+    }
+
+    // Tag divergences against the allow-list. We don't suppress them in
+    // the per-language JSON — the report still shows every entry — but
+    // we decrement the gate-critical count.
+    let mut allowlisted = 0usize;
+    for entry in &aggregate.entries {
+        if !entry.pass && allowlist.permits(lang, &entry.name) {
+            allowlisted += 1;
+        }
+    }
+
+    // Fail the gate when *any* non-allow-listed divergence exists, OR
+    // when a positive/negative-syntax test disagreed (those are
+    // always load-bearing). allow-listed positive/negative splits are
+    // still permitted per the gate matrix (the ALLOWLIST is the
+    // only exception knob).
+    let hard_failures = aggregate
+        .entries
+        .iter()
+        .filter(|e| !e.pass && !allowlist.permits(lang, &e.name))
+        .count();
+    let fail_gate = hard_failures > 0;
 
     Ok(LangOutcome {
         corpora,
         oracles,
-        report: Some(report),
-        stub_reason,
+        manifests,
+        summary: aggregate,
+        allowlisted,
+        stub_reason: if plan.allowlist_present {
+            None
+        } else {
+            Some("ALLOWLIST.md absent — divergences cannot be silenced".into())
+        },
         fail_gate,
     })
 }
 
-/// Placeholder allow-list predicate. The real one is owned by
-/// `v1-diff-core` + the `ALLOWLIST.md` format; for the PR gate we accept
-/// an empty divergence list only.
-const fn allowlisted_equivalent(plan: &Plan, report: &DiffReport) -> bool {
-    plan.allowlist_present && report.is_clean()
+/// Map language tag → whether we have a main parser wired. Discovery
+/// for the other languages runs but they never contribute test
+/// executions.
+fn language_has_main_parser(lang: &str) -> bool {
+    matches!(lang, "nt" | "nq" | "ttl" | "trig")
 }
 
 fn discover_corpora(root: &Path, lang: &str, smoke: bool) -> Result<Vec<PathBuf>, String> {
@@ -530,9 +595,7 @@ fn discover_oracles(root: &Path, lang: &str) -> Result<Vec<PathBuf>, String> {
         return Ok(Vec::new());
     }
     let mut out = Vec::new();
-    for entry in fs::read_dir(&base)
-        .map_err(|e| format!("cannot read {}: {e}", base.display()))?
-    {
+    for entry in fs::read_dir(&base).map_err(|e| format!("cannot read {}: {e}", base.display()))? {
         let entry = entry.map_err(|e| format!("read_dir entry: {e}"))?;
         let path = entry.path();
         if path.extension().and_then(OsStr::to_str) == Some("json") {
@@ -551,9 +614,7 @@ fn walk_files(root: &Path) -> Result<Vec<PathBuf>, String> {
         let rd = fs::read_dir(&dir).map_err(|e| format!("read_dir {}: {e}", dir.display()))?;
         for entry in rd {
             let entry = entry.map_err(|e| format!("read_dir entry: {e}"))?;
-            let ft = entry
-                .file_type()
-                .map_err(|e| format!("file_type: {e}"))?;
+            let ft = entry.file_type().map_err(|e| format!("file_type: {e}"))?;
             let path = entry.path();
             if ft.is_dir() {
                 stack.push(path);
@@ -596,6 +657,61 @@ fn repo_root() -> Result<PathBuf, String> {
 }
 
 // ---------------------------------------------------------------------
+// Allow-list parsing. Intentionally minimal — the ALLOWLIST.md schema
+// is described at crates/testing/rdf-diff/ALLOWLIST.md. Each active
+// entry is `<language>:<test-name>` on its own line, case-sensitive.
+// ---------------------------------------------------------------------
+
+/// Parsed allow-list entries keyed by `(language, test-name)`. A hit on
+/// this set means a divergence is intentional and does not fail the
+/// gate.
+#[derive(Debug, Default)]
+struct Allowlist {
+    entries: BTreeSet<(String, String)>,
+}
+
+impl Allowlist {
+    fn permits(&self, lang: &str, test_name: &str) -> bool {
+        self.entries
+            .contains(&(lang.to_owned(), test_name.to_owned()))
+    }
+}
+
+fn load_allowlist(path: &Path) -> Allowlist {
+    let Ok(contents) = fs::read_to_string(path) else {
+        return Allowlist::default();
+    };
+    let mut out = Allowlist::default();
+    let mut in_fence = false;
+    for raw in contents.lines() {
+        let line = raw.trim();
+        if line.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if !in_fence {
+            continue;
+        }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((language, rest)) = line.split_once(':') else {
+            continue;
+        };
+        // Strip an optional trailing ":<variant>" hint — the allow-list
+        // key is (language, test-name) only; the variant is documented
+        // for humans.
+        let name = rest.split(':').next().unwrap_or(rest).trim();
+        let language = language.trim();
+        if language.is_empty() || name.is_empty() {
+            continue;
+        }
+        out.entries.insert((language.to_owned(), name.to_owned()));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------
 // Minimal JSON emission. We deliberately avoid `serde_json` to keep the
 // xtask dependency graph empty except for `rdf-diff`. All writers below
 // handle only the shapes defined in this file.
@@ -607,24 +723,36 @@ fn diff_report_json(lang: &str, o: &LangOutcome) -> String {
     push_kv(&mut s, "language", &json_string(lang), true);
     push_kv(&mut s, "corpora_count", &o.corpora.len().to_string(), false);
     push_kv(&mut s, "oracles_count", &o.oracles.len().to_string(), false);
+    push_kv(
+        &mut s,
+        "manifests_count",
+        &o.manifests.len().to_string(),
+        false,
+    );
+    push_kv(&mut s, "tests_executed", &o.summary.total.to_string(), false);
+    push_kv(&mut s, "pass", &o.summary.pass.to_string(), false);
+    push_kv(
+        &mut s,
+        "divergences",
+        &o.summary.divergences.to_string(),
+        false,
+    );
+    push_kv(&mut s, "skipped", &o.summary.skipped.to_string(), false);
+    push_kv(&mut s, "allowlisted", &o.allowlisted.to_string(), false);
     push_kv(&mut s, "fail_gate", bool_lit(o.fail_gate), false);
+    push_kv(
+        &mut s,
+        "clean",
+        bool_lit(o.summary.divergences == 0),
+        false,
+    );
     if let Some(reason) = &o.stub_reason {
         push_kv(&mut s, "stub_reason", &json_string(reason), false);
     }
-    if let Some(report) = &o.report {
-        s.push_str(",\"divergences\":");
-        s.push_str(&diff_divergences_json(report));
-        push_kv(
-            &mut s,
-            "triage_hint",
-            &json_string(&report.triage_hint),
-            false,
-        );
-        push_kv(&mut s, "clean", bool_lit(report.is_clean()), false);
-    } else {
-        s.push_str(",\"divergences\":[]");
-        push_kv(&mut s, "clean", bool_lit(true), false);
-    }
+    s.push_str(",\"entries\":");
+    s.push_str(&entries_json(&o.summary.entries));
+    s.push_str(",\"manifests\":");
+    s.push_str(&json_path_array(&o.manifests));
     s.push_str(",\"corpora\":");
     s.push_str(&json_path_array(&o.corpora));
     s.push_str(",\"oracles\":");
@@ -633,27 +761,33 @@ fn diff_report_json(lang: &str, o: &LangOutcome) -> String {
     s
 }
 
-fn diff_divergences_json(report: &DiffReport) -> String {
-    // We only surface *count* and *variant names* here — the rich shape
-    // belongs to `v1-diff-core` and is rendered by the harness-side
-    // report emitter once the real diff runs. This keeps xtask decoupled
-    // from the internal enum shape.
+fn entries_json(entries: &[EntryOutcome]) -> String {
     let mut s = String::from("[");
-    for (i, d) in report.divergences.iter().enumerate() {
+    for (i, e) in entries.iter().enumerate() {
         if i > 0 {
             s.push(',');
         }
-        let variant = match d {
-            Divergence::FactOnlyIn => "FactOnlyIn",
-            Divergence::ObjectMismatch => "ObjectMismatch",
-            Divergence::AcceptRejectSplit => "AcceptRejectSplit",
-        };
-        s.push_str("{\"variant\":");
-        s.push_str(&json_string(variant));
+        s.push('{');
+        push_kv(&mut s, "name", &json_string(&e.name), true);
+        push_kv(&mut s, "kind", &json_string(kind_label(e.kind)), false);
+        push_kv(&mut s, "pass", bool_lit(e.pass), false);
+        if let Some(variant) = e.divergence {
+            push_kv(&mut s, "divergence", &json_string(variant), false);
+        }
+        push_kv(&mut s, "message", &json_string(&e.message), false);
         s.push('}');
     }
     s.push(']');
     s
+}
+
+const fn kind_label(kind: TestKind) -> &'static str {
+    match kind {
+        TestKind::PositiveSyntax => "PositiveSyntax",
+        TestKind::NegativeSyntax => "NegativeSyntax",
+        TestKind::Eval => "Eval",
+        TestKind::NegativeEval => "NegativeEval",
+    }
 }
 
 fn json_path_array(paths: &[PathBuf]) -> String {
@@ -714,14 +848,13 @@ struct Summary {
 impl Summary {
     fn push(&mut self, lang: &str, o: &LangOutcome) {
         self.languages_checked += 1;
-        let divergences = o.report.as_ref().map_or(0, |r| r.divergences.len());
-        self.total_divergences += divergences;
+        self.total_divergences += o.summary.divergences;
         if o.fail_gate {
             self.had_unacceptable_failure = true;
         }
         self.per_language.push((
-            lang.to_string(),
-            divergences,
+            lang.to_owned(),
+            o.summary.divergences,
             o.fail_gate,
             o.stub_reason.clone(),
         ));
@@ -768,3 +901,81 @@ impl Summary {
     }
 }
 
+/// Per-language count bucket for the Phase-A exit-gate report.
+#[derive(Default, Clone)]
+struct GateCounts {
+    total: usize,
+    pass: usize,
+    divergences: usize,
+    allowlisted: usize,
+}
+
+/// Phase-A exit-gate aggregator. Serialises to
+/// `target/verification-reports/phase-a-exit-gate.json` so CI can gate
+/// on per-language pass rates without re-parsing every per-format
+/// report.
+#[derive(Default)]
+struct ExitGate {
+    per_language: Vec<(String, GateCounts)>,
+}
+
+impl ExitGate {
+    fn push(&mut self, lang: &str, o: &LangOutcome) {
+        self.per_language.push((
+            lang.to_owned(),
+            GateCounts {
+                total: o.summary.total,
+                pass: o.summary.pass,
+                divergences: o.summary.divergences,
+                allowlisted: o.allowlisted,
+            },
+        ));
+    }
+
+    fn total_executed(&self) -> usize {
+        self.per_language.iter().map(|(_, c)| c.total).sum()
+    }
+
+    fn total_pass(&self) -> usize {
+        self.per_language.iter().map(|(_, c)| c.pass).sum()
+    }
+
+    fn total_divergences(&self) -> usize {
+        self.per_language.iter().map(|(_, c)| c.divergences).sum()
+    }
+
+    fn total_allowlisted(&self) -> usize {
+        self.per_language.iter().map(|(_, c)| c.allowlisted).sum()
+    }
+
+    fn to_json(&self) -> String {
+        let mut s = String::new();
+        s.push('{');
+        let mut first = true;
+        for (lang, counts) in &self.per_language {
+            if !first {
+                s.push(',');
+            }
+            first = false;
+            s.push_str(&json_string(lang));
+            s.push_str(":{");
+            push_kv(&mut s, "total", &counts.total.to_string(), true);
+            push_kv(&mut s, "pass", &counts.pass.to_string(), false);
+            push_kv(
+                &mut s,
+                "divergences",
+                &counts.divergences.to_string(),
+                false,
+            );
+            push_kv(
+                &mut s,
+                "allowlisted",
+                &counts.allowlisted.to_string(),
+                false,
+            );
+            s.push('}');
+        }
+        s.push('}');
+        s
+    }
+}

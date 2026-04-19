@@ -1,0 +1,26 @@
+[package]
+name = "rdf-format"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Per-format serialisers (N-Triples, N-Quads, Turtle, TriG) — the round-trip partner of the Phase-A parsers (ADR-0017 §4, ADR-0018 §4)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+
+# Round-trip tests load the Phase-A main parsers to verify inverse-of-parser
+# behaviour. Kept strictly dev-only — the serialiser does not depend on a
+# parser at runtime.
+[dev-dependencies]
+rdf-ntriples = { path = "../rdf-ntriples", version = "0.0.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }

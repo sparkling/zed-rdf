@@ -62,6 +62,10 @@ members = [
     # implement `rdf_diff::Parser` and are compared by the diff
     # harness (ADR-0020 §1.4). Grammar-only — no execution semantics.
     "crates/sparql-syntax",
+    # Per-format serialisers (NT/NQ/TTL/TriG) — round-trip partner of the
+    # Phase-A parsers (ADR-0017 Phase A, `pa-rdf-format`). Output matches
+    # the canonical form defined by `rdf_diff::Facts::canonicalise`.
+    "crates/rdf-format",
 ]
 
 [workspace.package]

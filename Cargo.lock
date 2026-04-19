@@ -535,6 +535,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rdf-format"
+version = "0.0.0"
+dependencies = [
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-ntriples",
+ "rdf-turtle",
+]
+
+[[package]]
 name = "rdf-iri"
 version = "0.0.0"
 dependencies = [
