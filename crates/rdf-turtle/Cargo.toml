@@ -1,0 +1,20 @@
+[package]
+name = "rdf-turtle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Main Turtle 1.1 + TriG parser for the zed-rdf workspace (ADR-0017 Phase A, ADR-0020 §1.4, pins TTL-LITESC-001 / TTL-BNPFX-001)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Frozen trait surface — the integration contract (ADR-0020 §1.4).
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+thiserror = { workspace = true }

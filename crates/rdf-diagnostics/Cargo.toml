@@ -1,0 +1,29 @@
+[package]
+name = "rdf-diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Shared diagnostic-reporting infrastructure (Diagnostic, Severity, Span, DiagnosticBag, human-readable rendering) for the zed-rdf parser family. Upstream of every Phase A parser crate per ADR-0017 §4."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Default build has **no** transitive LSP dependency. Parsers depend on
+# rdf-diagnostics with `default-features = false`; the LSP crate opts in.
+default = []
+# Adds `impl From<Diagnostic> for lsp_types::Diagnostic`. The `lsp_types`
+# crate is pulled in only when this feature is requested — see ADR-0004
+# (third-party crate policy): foundation crates stay LSP-agnostic by
+# default.
+lsp = ["dep:lsp-types"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# Optional — only compiled when the `lsp` feature is enabled.
+lsp-types = { version = "0.97", optional = true }

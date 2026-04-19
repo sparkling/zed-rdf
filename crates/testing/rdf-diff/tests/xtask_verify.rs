@@ -34,10 +34,13 @@ fn xtask_crate_exists(root: &Path) -> bool {
 
 /// **I1 — `cargo xtask verify --smoke` exits zero on the smoke corpus.**
 ///
-/// Skips silently until `v1-ci-wiring` lands the `xtask` crate. When it
-/// does, remove the early-return and the test becomes a hard gate.
+/// `v1-ci-wiring` landed `xtask/verify` in stub mode, so this gate is
+/// now active. Full main-parser integration (Phase A) remains a
+/// follow-up: until then xtask runs in stub mode and emits a clean
+/// report, so the gate is an exit-code check only. `phaseA-tester`
+/// leaves the command-line wiring intact and un-ignored this test as
+/// part of the Phase-A verification pass.
 #[test]
-#[ignore = "unignore once v1-ci-wiring lands xtask/verify"]
 fn xtask_verify_smoke_corpus_green() {
     let root = workspace_root();
     if !xtask_crate_exists(&root) {

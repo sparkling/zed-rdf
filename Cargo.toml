@@ -6,6 +6,10 @@
 [workspace]
 resolver = "3"
 members = [
+    # Phase A foundations (ADR-0017 §4, ADR-0018 Wave 1) — shared
+    # diagnostic-reporting infrastructure upstream of every parser.
+    # Claimed by `phaseA-rdf-diagnostics`.
+    "crates/rdf-diagnostics",
     # verification-v1 sweep (ADR-0020 §1.4) — frozen trait surface for the
     # diff harness, shadow parsers, and oracle adapters. Kept under
     # crates/testing/ because it is test-only; main-parser builds do not
@@ -23,6 +27,20 @@ members = [
     # Shadow Turtle 1.1 + TriG parser (cohort-A, v1-shadow-ttl).
     # Disjoint implementation for diff-harness verification.
     "crates/syntax/rdf-turtle-shadow",
+    # Main Turtle 1.1 + TriG parser (ADR-0017 Phase A, `phaseA-rdf-turtle`).
+    # Independent of the shadow; both implement `rdf_diff::Parser` and are
+    # compared by the diff harness (ADR-0020 §1.4).
+    "crates/rdf-turtle",
+    # Main Phase-A N-Triples + N-Quads parser (ADR-0017 §4,
+    # `phaseA-rdf-ntriples`). Disjoint from `rdf-ntriples-shadow` above;
+    # both implement `rdf_diff::Parser` and are compared by the diff
+    # harness (ADR-0020 §1.4).
+    "crates/rdf-ntriples",
+    # Main RFC 3987 IRI parser / normaliser / RFC 3986 §5 resolver
+    # (ADR-0017 Phase A, `phaseA-rdf-iri`). Independent of the shadow at
+    # `crates/syntax/rdf-iri-shadow`; both implement `rdf_diff::Parser`
+    # and are compared by the diff harness (ADR-0020 §1.4).
+    "crates/rdf-iri",
     # ADR-0019 §1 enforcement: asserts mechanically that no banned
     # third-party RDF/SPARQL parser crate (oxttl, sophia_*, …) leaks
     # into a workspace member's runtime dependency closure. Belt-and-

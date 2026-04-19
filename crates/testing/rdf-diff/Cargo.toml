@@ -22,3 +22,12 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
+
+# Dev-dependencies for the adversary-* integration tests (ADR-0019 §4):
+# main parsers are loaded through their `rdf_diff::Parser` implementations
+# to drive fixture-level diffs. Kept strictly dev-only — the frozen trait
+# surface has no runtime edge onto the parser crates.
+[dev-dependencies]
+rdf-iri = { path = "../../rdf-iri", version = "0.0.0" }
+rdf-ntriples = { path = "../../rdf-ntriples", version = "0.0.0" }
+rdf-turtle = { path = "../../rdf-turtle", version = "0.0.0" }

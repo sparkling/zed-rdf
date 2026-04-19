@@ -7,22 +7,11 @@
 //!
 //! ## Lifecycle
 //!
-//! Shadow parsers (`rdf-turtle-shadow`) and the main parser (`rdf-turtle`)
-//! are claimed by `v1-shadow-ttl` and later Phase-A work. Until both exist
-//! the per-fixture parse-and-diff bodies cannot be wired — tests are
-//! `#[ignore]`-gated and document the expected divergence so the
-//! `v1-reviewer` has a concrete unignore checklist.
-//!
-//! The fixture-discovery test (`AT0`) is **not** ignored: it runs on every
-//! `cargo test --workspace` and verifies that the fixture directory is
-//! present and sorted deterministically.
-//!
-//! ## Integration with `xtask verify`
-//!
-//! When `v1-ci-wiring` lands the `xtask verify adversary-ttl` sub-command,
-//! the same fixtures are fed to the parser ensemble via
-//! `cargo xtask verify --adversary-ttl`. The Rust tests here are the
-//! pre-landing in-process mirror of that check.
+//! With `rdf-turtle` (main) landed, each test now runs the fixture through
+//! the main parser and asserts the fact set matches the fixture-header
+//! expectation. Cross-parser diff (main vs shadow vs oxttl) lives in
+//! `xtask verify`; these tests are the in-process smoke check of the
+//! main parser on the adversary corpus.
 //!
 //! ## ADR references
 //!
@@ -30,9 +19,17 @@
 //! - ADR-0020 §6.5 — cohort-B path claims; adversary paths never overlap
 //!   non-adversary test paths by construction.
 
-#![allow(clippy::missing_panics_doc)]
+#![allow(
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::items_after_statements,
+    clippy::map_unwrap_or,
+)]
 
 use std::path::{Path, PathBuf};
+
+use rdf_diff::{Fact, Parser as _};
+use rdf_turtle::{TriGParser, TurtleParser};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,6 +68,22 @@ fn read_fixture(name: &str) -> String {
         .unwrap_or_else(|e| panic!("could not read fixture {name}: {e}"))
 }
 
+fn parse_ttl_expect_ok(name: &str) -> Vec<Fact> {
+    let src = read_fixture(name);
+    match TurtleParser::new().parse(src.as_bytes()) {
+        Ok(out) => out.facts.set.keys().cloned().collect(),
+        Err(d) => panic!("expected {name} to parse; got {d:?}"),
+    }
+}
+
+fn parse_trig_expect_ok(name: &str) -> Vec<Fact> {
+    let src = read_fixture(name);
+    match TriGParser::new().parse(src.as_bytes()) {
+        Ok(out) => out.facts.set.keys().cloned().collect(),
+        Err(d) => panic!("expected trig {name} to parse; got {d:?}"),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AT0 — Fixture discovery
 // ---------------------------------------------------------------------------
@@ -96,7 +109,6 @@ fn at0_fixture_discovery_present_and_sorted() {
         fixtures.len()
     );
 
-    // Deterministic sort invariant.
     for w in fixtures.windows(2) {
         assert!(w[0] <= w[1], "fixture list is not sorted: {:?} > {:?}", w[0], w[1]);
     }
@@ -130,242 +142,247 @@ fn at0b_all_expected_fixtures_present() {
 // AT1 — FM1: Leading digit in PN_LOCAL
 // ---------------------------------------------------------------------------
 
-/// **AT1 — FM1: PN_LOCAL may start with a digit.**
-///
-/// `ex:123` is syntactically valid Turtle. Parsers that apply XML NCName
-/// rules will reject the input (AcceptRejectSplit); conformant parsers
-/// accept it.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT1)"]
 fn at1_fm1_leading_digit_local() {
-    let _input = read_fixture("fm1-leading-digit-local.ttl");
-    // Wiring (to fill when parsers land):
-    //   let main   = rdf_turtle::Parser::default().parse(_input.as_bytes());
-    //   let shadow = rdf_turtle_shadow::Parser::default().parse(_input.as_bytes());
-    //   // Both should accept; check agreement on the produced triples.
-    //   let (main_ok, shadow_ok) = (main.is_ok(), shadow.is_ok());
-    //   assert!(main_ok && shadow_ok,
-    //       "FM1: expected both parsers to accept; main={main_ok} shadow={shadow_ok}");
-    //   let report = diff(&main.unwrap().facts, &shadow.unwrap().facts)
-    //       .expect("diff should not be NonCanonical");
-    //   assert!(report.is_clean(), "FM1 diff: {:?}", report.divergences);
-    todo!("wire AT1 when parsers land")
+    let f = parse_ttl_expect_ok("fm1-leading-digit-local.ttl");
+    // Three triples: ex:123, ex:0start, ex:9end — all as subjects.
+    assert_eq!(f.len(), 3);
+    let subjects: Vec<_> = f.iter().map(|t| t.subject.clone()).collect();
+    assert!(subjects.contains(&"<http://example/123>".to_owned()));
+    assert!(subjects.contains(&"<http://example/0start>".to_owned()));
+    assert!(subjects.contains(&"<http://example/9end>".to_owned()));
 }
 
 // ---------------------------------------------------------------------------
 // AT2 — FM1b: @prefix redefinition
 // ---------------------------------------------------------------------------
 
-/// **AT2 — FM1b: @prefix redefinition replaces earlier binding.**
-///
-/// After a second `@prefix ex:` the first binding must be forgotten.
-/// Stale-prefix parsers produce wrong absolute IRIs (FactOnlyIn).
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT2)"]
 fn at2_fm1b_prefix_redefinition() {
-    let _input = read_fixture("fm1-prefix-redefinition.ttl");
-    todo!("wire AT2 when parsers land")
+    let f = parse_ttl_expect_ok("fm1-prefix-redefinition.ttl");
+    let subjects: std::collections::BTreeSet<_> =
+        f.iter().map(|t| t.subject.clone()).collect();
+    assert!(subjects.contains("<http://example/a/s>"));
+    assert!(subjects.contains("<http://example/b/s>"));
 }
 
 // ---------------------------------------------------------------------------
 // AT3 — FM2: Percent-encoding in local part
 // ---------------------------------------------------------------------------
 
-/// **AT3 — FM2: Percent-encoded local part is NOT decoded.**
-///
-/// `ex:caf%C3%A9` must produce `<http://example/caf%C3%A9>` — the
-/// percent-encoding must not be decoded before IRI concatenation.
-/// A decoding parser produces `<http://example/café>`, a different IRI
-/// (ObjectMismatch / FactOnlyIn).
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT3)"]
 fn at3_fm2_percent_encoding_not_decoded() {
-    let _input = read_fixture("fm2-percent-encoding-local.ttl");
-    todo!("wire AT3 when parsers land")
+    let f = parse_ttl_expect_ok("fm2-percent-encoding-local.ttl");
+    let subjects: std::collections::BTreeSet<_> =
+        f.iter().map(|t| t.subject.clone()).collect();
+    // Must pass the percent-encoding through unchanged (pin IRI-PCT-001).
+    assert!(subjects.contains("<http://example/caf%C3%A9>"));
+    assert!(subjects.contains("<http://example/spa%20ce>"));
 }
 
 // ---------------------------------------------------------------------------
 // AT4 — FM3: Keyword scope
 // ---------------------------------------------------------------------------
 
-/// **AT4 — FM3: `a`/`true`/`false` are position-sensitive.**
-///
-/// `a` is rdf:type ONLY in predicate position. `true`/`false` are boolean
-/// literals ONLY in object position. Over-eager keyword scanners produce
-/// parse errors or wrong node types.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT4)"]
 fn at4_fm3_keyword_scope_position_sensitive() {
-    let _input = read_fixture("fm3-keyword-scope.ttl");
-    todo!("wire AT4 when parsers land")
+    let f = parse_ttl_expect_ok("fm3-keyword-scope.ttl");
+    assert_eq!(f.len(), 4);
+    // `a` in predicate position is rdf:type.
+    assert!(
+        f.iter()
+            .any(|t| t.predicate == "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),
+    );
+    // `<http://example/a>` in subject position is an IRI, NOT the keyword.
+    assert!(f.iter().any(|t| t.subject == "<http://example/a>"));
+    // Booleans in object position.
+    assert!(
+        f.iter()
+            .any(|t| t.object == "\"true\"^^<http://www.w3.org/2001/XMLSchema#boolean>"),
+    );
+    assert!(
+        f.iter()
+            .any(|t| t.object == "\"false\"^^<http://www.w3.org/2001/XMLSchema#boolean>"),
+    );
 }
 
 // ---------------------------------------------------------------------------
 // AT5 — FM4a: Empty collection = rdf:nil
 // ---------------------------------------------------------------------------
 
-/// **AT5 — FM4a: Empty collection `()` resolves to `rdf:nil`.**
-///
-/// A conformant parser must emit the triple with `rdf:nil` as the object,
-/// not a fresh blank node. Divergence: FactOnlyIn on the blank-node variant.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT5)"]
 fn at5_fm4a_empty_collection_is_rdf_nil() {
-    let _input = read_fixture("fm4-empty-collection.ttl");
-    todo!("wire AT5 when parsers land")
+    let f = parse_ttl_expect_ok("fm4-empty-collection.ttl");
+    assert_eq!(f.len(), 1);
+    assert_eq!(
+        f[0].object,
+        "<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>",
+    );
 }
 
 // ---------------------------------------------------------------------------
 // AT6 — FM4b: Nested collections
 // ---------------------------------------------------------------------------
 
-/// **AT6 — FM4b: Nested list `((1))` must not be flattened.**
-///
-/// The outer `rdf:first` must point to the blank node heading the inner
-/// list, not directly to the integer `1`. Flattening produces a different
-/// graph (FactOnlyIn / ObjectMismatch).
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT6)"]
 fn at6_fm4b_nested_collection_not_flattened() {
-    let _input = read_fixture("fm4-nested-collection.ttl");
-    todo!("wire AT6 when parsers land")
+    let f = parse_ttl_expect_ok("fm4-nested-collection.ttl");
+    // Expected triples:
+    //   (1):    3 facts (head->first=1, head->rest=nil, s->p1=head)
+    //   ((1)):  5 facts (outer head->first=inner head, outer->rest=nil,
+    //           inner->first=1, inner->rest=nil, s->p2=outer)
+    //   (1 2):  5 facts (head→first=1, head→rest=tail,
+    //           tail→first=2, tail→rest=nil, s→p3=head)
+    // Total = 13 facts.
+    assert_eq!(f.len(), 13, "got {f:?}");
+    // The outer rdf:first for ((1)) must be a bnode, not the integer 1.
+    let first_preds: Vec<_> = f
+        .iter()
+        .filter(|t| {
+            t.predicate == "<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>"
+        })
+        .collect();
+    // At least one rdf:first points to a bnode (the nested-head case).
+    assert!(first_preds.iter().any(|t| t.object.starts_with("_:")));
 }
 
 // ---------------------------------------------------------------------------
 // AT7 — FM5: Long string with raw newline (positive case)
 // ---------------------------------------------------------------------------
 
-/// **AT7 — FM5: Raw newline in `"""…"""` is valid content.**
-///
-/// A parser that applies short-string rules inside `"""…"""` will reject
-/// this valid input (AcceptRejectSplit). The accepted form must carry the
-/// newline character in the literal value.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT7)"]
 fn at7_fm5_long_string_raw_newline_accepted() {
-    let _input = read_fixture("fm5-long-string-newline.ttl");
-    todo!("wire AT7 when parsers land")
+    let f = parse_ttl_expect_ok("fm5-long-string-newline.ttl");
+    assert_eq!(f.len(), 2);
+    assert!(f.iter().all(|t| t.object.contains('\n')));
 }
 
 // ---------------------------------------------------------------------------
 // AT8 — FM5: Short string with raw newline (negative case)
 // ---------------------------------------------------------------------------
 
-/// **AT8 — FM5: Raw newline in `"…"` is a parse error.**
-///
-/// A parser that shares a lexer path with long strings will accept this
-/// invalid input. Conformant parsers must reject it. Divergence:
-/// AcceptRejectSplit.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT8)"]
 fn at8_fm5_short_string_raw_newline_rejected() {
-    let _input = read_fixture("fm5-short-string-newline-invalid.ttl");
-    // Expected: at least one parser rejects (Diagnostics { fatal: true }).
-    // Divergence = AcceptRejectSplit if parsers disagree on accept/reject.
-    todo!("wire AT8 when parsers land")
+    let src = read_fixture("fm5-short-string-newline-invalid.ttl");
+    let res = TurtleParser::new().parse(src.as_bytes());
+    let d = res.expect_err("short string with raw newline must be rejected");
+    assert!(d.fatal, "diagnostic must be fatal");
+    assert!(
+        d.messages.iter().any(|m| m.starts_with("TTL-LITESC-001")),
+        "expected TTL-LITESC-001, got {:?}",
+        d.messages,
+    );
 }
 
 // ---------------------------------------------------------------------------
 // AT9 — FM6: BASE directive replacement
 // ---------------------------------------------------------------------------
 
-/// **AT9 — FM6: SPARQL-style `BASE` replaces active base IRI.**
-///
-/// After `@base <http://example/a/>` then `BASE <http://example/b/>`,
-/// the relative IRI `<rel>` must resolve to `<http://example/b/rel>`.
-/// A parser that ignores `BASE` will resolve against the wrong base.
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT9)"]
 fn at9_fm6_base_directive_replacement() {
-    let _input = read_fixture("fm6-base-directive-replacement.ttl");
-    todo!("wire AT9 when parsers land")
+    let f = parse_ttl_expect_ok("fm6-base-directive-replacement.ttl");
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].subject, "<http://example/b/rel>");
+    assert_eq!(f[0].predicate, "<http://example/b/p>");
+    assert_eq!(f[0].object, "<http://example/b/o>");
 }
 
 // ---------------------------------------------------------------------------
 // AT10 — FM6b: Chained @base
 // ---------------------------------------------------------------------------
 
-/// **AT10 — FM6b: Each `@base` replaces the previous; IRI resolution uses
-/// the base in scope at that point in the document.**
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT10)"]
 fn at10_fm6b_chained_base_resolution() {
-    let _input = read_fixture("fm6-chained-base.ttl");
-    todo!("wire AT10 when parsers land")
+    let f = parse_ttl_expect_ok("fm6-chained-base.ttl");
+    let subjects: std::collections::BTreeSet<_> =
+        f.iter().map(|t| t.subject.clone()).collect();
+    assert!(subjects.contains("<http://example/a/r1>"));
+    assert!(subjects.contains("<http://example/b/r2>"));
+    assert!(subjects.contains("<http://example/c/r3>"));
 }
 
 // ---------------------------------------------------------------------------
 // AT11 — FM7: Trailing semicolon
 // ---------------------------------------------------------------------------
 
-/// **AT11 — FM7: Trailing `;` before `.` is valid Turtle.**
-///
-/// The grammar's optional `(verb objectList)?` after `;` means a bare
-/// trailing semicolon is valid. Strict parsers that require a predicate
-/// after every `;` will reject this input (AcceptRejectSplit).
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT11)"]
 fn at11_fm7_trailing_semicolon_accepted() {
-    let _input = read_fixture("fm7-trailing-semicolon.ttl");
-    todo!("wire AT11 when parsers land")
+    let f = parse_ttl_expect_ok("fm7-trailing-semicolon.ttl");
+    // Fixture asserts exactly three triples (1 + 2 on the second line).
+    assert_eq!(f.len(), 3);
 }
 
 // ---------------------------------------------------------------------------
-// AT12 — FM8: TriG blank-node scope per graph
+// AT12 — FM8: TriG blank-node scope (DIVERGENCE per TTL-BNPFX-001)
 // ---------------------------------------------------------------------------
 
-/// **AT12 — FM8: TriG blank-node labels are scoped per graph block.**
+/// **AT12 — FM8: TriG blank-node labels are document-scope.**
 ///
-/// `_:b` in the default graph and `_:b` in `<http://example/g1>` are
-/// distinct blank nodes. A document-level blank-node table incorrectly
-/// unifies them (FactOnlyIn divergence after canonicalisation).
-///
-/// Unignore when a TriG parser implementing the `rdf_diff::Parser` trait
-/// lands.
+/// The fixture's original hypothesis (per-graph-block scope) is
+/// **explicitly rejected** by pin `TTL-BNPFX-001`. The pin chooses
+/// document-scope. This test asserts the pinned reading: `_:b` across
+/// the default graph and the two named graphs is the SAME blank node.
+/// Recorded as a divergence finding in
+/// `crate/rdf-turtle/divergence-findings` because `oxttl` (the ADR-0019
+/// §1 oracle) also implements document-scope, so the pin matches the
+/// oracle on this input while the fixture text hypothesises the
+/// opposite. The fixture stays committed as a regression gate for the
+/// pinned reading.
 #[test]
-#[ignore = "unignore when trig parser lands (AT12)"]
 fn at12_fm8_trig_bnode_scope_per_graph() {
-    let _input = read_fixture("fm8-trig-bnode-scope.trig");
-    todo!("wire AT12 when trig parser lands")
+    let f = parse_trig_expect_ok("fm8-trig-bnode-scope.trig");
+    let subjects: std::collections::BTreeSet<_> =
+        f.iter().map(|t| t.subject.clone()).collect();
+    // All four quads share a subject `_:b` that canonicalises to one
+    // canonical bnode label after `Facts::canonicalise`.
+    assert_eq!(
+        subjects.len(),
+        1,
+        "TTL-BNPFX-001: _:b is document-scope across TriG graph blocks; \
+         got distinct subjects {subjects:?}",
+    );
 }
 
 // ---------------------------------------------------------------------------
 // AT13 — FM9: Numeric literal datatype selection
 // ---------------------------------------------------------------------------
 
-/// **AT13 — FM9: Numeric token shape determines XSD datatype.**
-///
-/// `1` → `xsd:integer`; `1.0` → `xsd:decimal`; `1.0e0` → `xsd:double`.
-/// Edge cases: `-0` and `+1` must be `xsd:integer`. A parser that strips
-/// fractional zeros or misidentifies sign-prefixed tokens assigns the wrong
-/// datatype (ObjectMismatch on the datatype IRI).
-///
-/// Unignore when `rdf-turtle` + `rdf-turtle-shadow` land.
 #[test]
-#[ignore = "unignore when rdf-turtle + rdf-turtle-shadow land (AT13)"]
 fn at13_fm9_numeric_literal_type_selection() {
-    let _input = read_fixture("fm9-numeric-literal-types.ttl");
-    todo!("wire AT13 when parsers land")
+    let f = parse_ttl_expect_ok("fm9-numeric-literal-types.ttl");
+    // Each fixture triple has a distinct predicate; we build a map
+    // predicate -> object for assertions.
+    use std::collections::BTreeMap;
+    let mut by_pred: BTreeMap<&str, &str> = BTreeMap::new();
+    for t in &f {
+        by_pred.insert(t.predicate.as_str(), t.object.as_str());
+    }
+    assert_eq!(
+        by_pred["<http://example/int1>"],
+        "\"1\"^^<http://www.w3.org/2001/XMLSchema#integer>",
+    );
+    assert_eq!(
+        by_pred["<http://example/dec1>"],
+        "\"1.0\"^^<http://www.w3.org/2001/XMLSchema#decimal>",
+    );
+    assert_eq!(
+        by_pred["<http://example/dbl1>"],
+        "\"1.0e0\"^^<http://www.w3.org/2001/XMLSchema#double>",
+    );
+    assert_eq!(
+        by_pred["<http://example/int_pos>"],
+        "\"+1\"^^<http://www.w3.org/2001/XMLSchema#integer>",
+    );
+    assert_eq!(
+        by_pred["<http://example/int_neg>"],
+        "\"-0\"^^<http://www.w3.org/2001/XMLSchema#integer>",
+    );
+    assert_eq!(
+        by_pred["<http://example/dbl2>"],
+        "\"1.5e2\"^^<http://www.w3.org/2001/XMLSchema#double>",
+    );
+    assert_eq!(
+        by_pred["<http://example/dec2>"],
+        "\"-1.5\"^^<http://www.w3.org/2001/XMLSchema#decimal>",
+    );
 }

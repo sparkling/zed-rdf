@@ -1,0 +1,18 @@
+[package]
+name = "rdf-ntriples"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Phase-A main N-Triples + N-Quads parser (ADR-0017 §4)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }

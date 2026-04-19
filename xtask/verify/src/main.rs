@@ -23,6 +23,20 @@
 //! 5. Exit non-zero on any non-allow-listed divergence. Allow-list file
 //!    path: `crates/testing/rdf-diff/ALLOWLIST.md` (ADR-0019 §2).
 //!
+//! Phase-A main-parser note (`phaseA-tester`, ADR-0017 §4): the main
+//! parsers (`rdf-iri::Iri` / `IriParser`, `rdf-ntriples::NTriplesParser`
+//! / `NQuadsParser`, `rdf-turtle::TurtleParser` / `TriGParser`) are
+//! expected to be registered by `rdf-diff-oracles` alongside the shadow
+//! crates and the JSON-oracle adapters. Each is still added behind a
+//! separate feature flag so that any one crate's landing can be
+//! integrated without blocking the others. Until all three land and
+//! `rdf-diff-oracles` declares path-deps on them, `verify_language`
+//! continues to run in stub mode for every language. ADR-0019
+//! §Validation reminds us that zero divergences on Phase-A inputs is
+//! *suspicious*; the stub-mode clean report is acceptable only because
+//! `stub_reason` is emitted alongside it — a downstream reader can
+//! distinguish "ran clean" from "did not run".
+//!
 //! Deliberate non-features:
 //!
 //! - No JVM invocation, ever. This binary only reads JSON that the

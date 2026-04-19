@@ -1,0 +1,19 @@
+[package]
+name = "rdf-iri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Main RFC 3987 IRI parser, normaliser, and RFC 3986 §5 resolver for the zed-rdf workspace (ADR-0017 Phase A, ADR-0020 §1.4)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+thiserror = { workspace = true }

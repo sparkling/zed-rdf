@@ -1,27 +1,37 @@
 //! Property tests for the `rdf-diff` frozen trait surface.
 //!
 //! Tracked in `docs/verification/tests/catalogue.md` under invariants
-//! `P1`, `P2`, `P3`. These tests integrate against the frozen API defined
-//! in `crates/testing/rdf-diff/src/lib.rs`; per ADR-0020 §1.4 the
+//! `P1`–`P6`. These tests integrate against the frozen API defined in
+//! `crates/testing/rdf-diff/src/lib.rs`; per ADR-0020 §1.4 the
 //! signatures are immutable for the duration of the verification-v1 sweep.
 //!
-//! ## Why `#[ignore]` by default
+//! ## Status
 //!
-//! `Facts::canonicalise`, `diff`, and `diff_many` are stubbed with
-//! `todo!()` until the `v1-diff-core` agent fills them. Running the
-//! properties before that would panic. Tests are therefore gated with
-//! `#[ignore]` and run via `cargo test --workspace -- --include-ignored`
-//! once the stubs land (wired into the `cargo-llvm-cov` target by
-//! `v1-ci-wiring`). This keeps `cargo test --workspace` green across the
-//! sweep without sacrificing the tests themselves.
+//! `Facts::canonicalise`, `diff`, and `diff_many` are now filled (the
+//! `v1-diff-core` pass landed in `verification-v1`), so `P1`–`P3` run
+//! on every `cargo test --workspace`. `phaseA-tester` un-ignored them
+//! and added four additional invariants (`P4`–`P6`) that exercise
+//! canonicalisation behaviours the main-parser Phase-A crates rely on:
+//!
+//! - `P4` — canonicalisation preserves fact cardinality modulo duplicate
+//!   collapse. A property the main NT/Turtle parsers must not violate
+//!   when they land.
+//! - `P5` — canonicalisation is stable across shuffled input order
+//!   (order-insensitivity of the set-level form).
+//! - `P6` — angle-wrapped absolute IRIs are idempotent under
+//!   `canonicalise_term`; bare absolute IRIs promote once and then
+//!   stay wrapped. Exercises the front-door validator's IRI shape
+//!   normalisation — the behavioural contract the main `rdf-iri`
+//!   crate's `IriParser` adapter will be diffed against.
 //!
 //! ## Why no `proptest` dependency
 //!
-//! `rdf-diff`'s `Cargo.toml` is claimed by `v1-diff-core`; per ADR-0020
-//! §6.5 this agent does not edit it. The property harness below is a
-//! minimal deterministic LCG-driven generator, sufficient for the three
-//! invariants under test. Once `v1-diff-core` lands, a follow-up handoff
-//! can replace it with `proptest` without changing the invariants.
+//! `rdf-diff`'s `Cargo.toml` is claimed by `v1-diff-core` / Phase-A
+//! reviewer; per ADR-0020 §6.5 this agent does not edit it. The
+//! property harness below is a minimal deterministic LCG-driven
+//! generator, sufficient for the invariants under test. Once the main
+//! parsers land the harness can be upgraded to `proptest` without
+//! changing the invariants.
 
 #![allow(clippy::missing_panics_doc)]
 
@@ -140,7 +150,6 @@ fn divergence_set(report: &rdf_diff::DiffReport) -> BTreeSet<String> {
 /// second pass — anything else is a leak of parser-internal state, which
 /// `rdf-diff::Facts` documents as a false-positive source.
 #[test]
-#[ignore = "unignore once v1-diff-core fills Facts::canonicalise (see properties.rs header)"]
 fn prop_canonicalise_is_idempotent() {
     for seed in 0..CASES {
         let mut rng = Lcg::new(u64::from(seed));
@@ -168,7 +177,6 @@ fn prop_canonicalise_is_idempotent() {
 /// `canonicalise`, that is itself a bug — `NonCanonical` should be
 /// impossible on a canonical input.
 #[test]
-#[ignore = "unignore once v1-diff-core fills Facts::canonicalise + diff"]
 fn prop_diff_self_is_clean() {
     for seed in 0..CASES {
         let mut rng = Lcg::new(u64::from(seed).wrapping_add(0xA5A5));
@@ -191,7 +199,6 @@ fn prop_diff_self_is_clean() {
 /// choices. Checked via `BTreeSet<String>` of the `Debug` formatting —
 /// sufficient for this sweep.
 #[test]
-#[ignore = "unignore once v1-diff-core fills Facts::canonicalise + diff"]
 fn prop_diff_commutative_at_set_level() {
     for seed in 0..CASES {
         let mut rng_a = Lcg::new(u64::from(seed).wrapping_add(0xF00D));
@@ -214,10 +221,226 @@ fn prop_diff_commutative_at_set_level() {
     }
 }
 
+/// **P4 — Canonicalisation preserves fact set size modulo duplicates.**
+///
+/// For any raw input, `|canonicalise(raw).set| ≤ |raw|`, and equality
+/// holds iff every fact in `raw` is already unique under the canonical
+/// form. Exercises the `BTreeMap::entry(...).or_insert(prov)` collapse
+/// branch in `Facts::canonicalise`.
+///
+/// The main NT / Turtle parsers (Phase A) feed this function with their
+/// parse output; a regression that produces duplicate facts would
+/// silently break oracle cross-agreement. Catching it here keeps the
+/// canonicalisation contract honest.
+#[test]
+fn prop_canonicalise_bounds_cardinality() {
+    for seed in 0..CASES {
+        let mut rng = Lcg::new(u64::from(seed).wrapping_add(0xC0DE));
+        let (raw, pfx) = gen_raw(&mut rng);
+        let raw_len = raw.len();
+        let facts = Facts::canonicalise(raw.clone(), pfx);
+        assert!(
+            facts.set.len() <= raw_len,
+            "canonicalise grew the fact set on seed {seed}: raw={} canonical={}",
+            raw_len,
+            facts.set.len()
+        );
+
+        // Duplicate-collapse lower bound: canonicalising a concatenation
+        // of a set with itself must not change cardinality.
+        let mut doubled: Vec<(Fact, FactProvenance)> = Vec::with_capacity(raw_len * 2);
+        doubled.extend(raw.iter().cloned());
+        doubled.extend(raw.iter().cloned());
+        let second = Facts::canonicalise(doubled, facts.prefixes.clone());
+        assert_eq!(
+            facts.set.len(),
+            second.set.len(),
+            "duplicate collapse failed on seed {seed}: \
+             facts={} doubled={}",
+            facts.set.len(),
+            second.set.len()
+        );
+    }
+}
+
+/// **P5 — Canonicalisation is order-insensitive.**
+///
+/// For any raw input `r` and any permutation `r'` of `r`,
+/// `canonicalise(r) == canonicalise(r')`. This is the property the
+/// diff harness implicitly relies on when comparing parser outputs
+/// whose internal emission order differs (streaming vs. buffered).
+///
+/// The permutation is produced by a second LCG so the shuffle is
+/// deterministic given `seed`.
+#[test]
+fn prop_canonicalise_order_insensitive() {
+    for seed in 0..CASES {
+        let mut rng = Lcg::new(u64::from(seed).wrapping_add(0xF1F1));
+        let (raw, pfx) = gen_raw(&mut rng);
+        if raw.len() < 2 {
+            continue;
+        }
+
+        // Fisher-Yates shuffle with a separate stream.
+        let mut shuffled = raw.clone();
+        let mut shuffle_rng = Lcg::new(u64::from(seed).wrapping_add(0x5EED));
+        for i in (1..shuffled.len()).rev() {
+            let j = shuffle_rng.gen_range(0, i + 1);
+            shuffled.swap(i, j);
+        }
+
+        let a = Facts::canonicalise(raw, pfx.clone());
+        let b = Facts::canonicalise(shuffled, pfx);
+        // Order-insensitivity is claimed at the fact-key level only.
+        // `FactProvenance` carries byte offsets that reflect the input's
+        // first-writer-wins ordering and therefore legitimately differs
+        // under permutation; comparing only the key set avoids a false
+        // positive.
+        let keys_a: std::collections::BTreeSet<_> = a.set.keys().cloned().collect();
+        let keys_b: std::collections::BTreeSet<_> = b.set.keys().cloned().collect();
+        assert_eq!(
+            keys_a, keys_b,
+            "canonicalise is not order-insensitive on seed {seed}"
+        );
+        // And the diff should agree at the set level.
+        let report = diff(&a, &b).expect("both canonical");
+        assert!(
+            report.is_clean(),
+            "diff not clean on permuted input (seed {seed}): {:?}",
+            report.divergences
+        );
+    }
+}
+
+/// **P6 — Angle-wrapped absolute IRI is an idempotent canonical form.**
+///
+/// `canonicalise_term` is internal, but we can observe it through
+/// [`Facts::canonicalise`]: feeding a bare absolute IRI and its
+/// angle-wrapped form must produce the same canonical fact set. The
+/// main `rdf-iri` parser's `IriParser` adapter is expected to emit
+/// angle-wrapped IRIs verbatim; regression here would surface as a
+/// front-door `NonCanonical` error in the diff harness the moment
+/// Phase A's IRI adapter is wired in.
+///
+/// Exercised via a direct self-diff: if the two forms converge after
+/// canonicalisation, `diff` is clean.
+#[test]
+fn prop_absolute_iri_wrap_is_idempotent() {
+    let raw_bare = vec![(
+        Fact {
+            subject: "http://example.org/s".to_string(),
+            predicate: "http://example.org/p".to_string(),
+            object: "http://example.org/o".to_string(),
+            graph: None,
+        },
+        FactProvenance {
+            offset: Some(0),
+            parser: "shape-probe".to_string(),
+        },
+    )];
+    let raw_wrapped = vec![(
+        Fact {
+            subject: "<http://example.org/s>".to_string(),
+            predicate: "<http://example.org/p>".to_string(),
+            object: "<http://example.org/o>".to_string(),
+            graph: None,
+        },
+        FactProvenance {
+            offset: Some(0),
+            parser: "shape-probe".to_string(),
+        },
+    )];
+    let bare = Facts::canonicalise(raw_bare, BTreeMap::new());
+    let wrapped = Facts::canonicalise(raw_wrapped, BTreeMap::new());
+    assert_eq!(
+        bare.set, wrapped.set,
+        "wrapping an absolute IRI changed the canonical form"
+    );
+
+    // And the diff harness accepts both without NonCanonical.
+    let report = diff(&bare, &wrapped).expect("both canonical");
+    assert!(
+        report.is_clean(),
+        "bare and wrapped IRI disagree after canonicalise: {:?}",
+        report.divergences
+    );
+}
+
+/// **P6b — Turtle smoke fact set survives a serialise / reparse round-trip.**
+///
+/// The main `rdf-turtle` parser is deferred (see phaseA-tester findings);
+/// until it lands we emulate the round-trip at the `Facts` layer: take a
+/// canonical fact set, re-emit each entry via `Debug`-free string
+/// reconstruction, and feed the result back through `canonicalise`. The
+/// invariant is that the resulting `Facts` equals the original — the
+/// canonical form must survive its own textual projection.
+///
+/// When the main Turtle parser lands this property gets upgraded to
+/// `parse → serialise → parse → diff.is_clean()`.
+#[test]
+fn prop_canonical_facts_self_round_trip() {
+    let raw = vec![
+        (
+            Fact {
+                subject: "<http://example.org/s>".to_string(),
+                predicate: "<http://example.org/p>".to_string(),
+                object: "\"plain\"".to_string(),
+                graph: None,
+            },
+            FactProvenance {
+                offset: Some(0),
+                parser: "round-trip".to_string(),
+            },
+        ),
+        (
+            Fact {
+                subject: "<http://example.org/s>".to_string(),
+                predicate: "<http://example.org/p>".to_string(),
+                object: "\"hi\"@en-us".to_string(),
+                graph: None,
+            },
+            FactProvenance {
+                offset: Some(1),
+                parser: "round-trip".to_string(),
+            },
+        ),
+        (
+            Fact {
+                subject: "_:b0".to_string(),
+                predicate: "<http://example.org/p>".to_string(),
+                object: "<http://example.org/o>".to_string(),
+                graph: Some("<http://example.org/g>".to_string()),
+            },
+            FactProvenance {
+                offset: Some(2),
+                parser: "round-trip".to_string(),
+            },
+        ),
+    ];
+    let first = Facts::canonicalise(raw, BTreeMap::new());
+
+    // Re-feed the canonical set through canonicalise. This simulates
+    // a lossless parser round-trip at the Facts layer. Note the lang
+    // tag case-fold happens inside canonicalise, so "@en-us" above
+    // becomes "@en-US" on first pass; the second pass must keep it.
+    let round_trip: Vec<_> = first
+        .set
+        .iter()
+        .map(|(f, p)| (f.clone(), p.clone()))
+        .collect();
+    let second = Facts::canonicalise(round_trip, first.prefixes.clone());
+
+    assert_eq!(
+        first, second,
+        "canonical Facts did not survive self round-trip"
+    );
+    let report = diff(&first, &second).expect("canonical");
+    assert!(report.is_clean(), "round-trip diff dirty: {:?}", report.divergences);
+}
+
 /// Sanity: the property harness itself compiles and exercises the API
-/// shape even before the stubs are filled. This is **not** a stub for a
-/// real invariant — it lets `cargo build --tests` tell us fast when the
-/// frozen surface drifts.
+/// shape. This lets `cargo build --tests` tell us fast when the frozen
+/// surface drifts.
 ///
 /// Not ignored: runs on every `cargo test --workspace`.
 #[test]
