@@ -1,0 +1,24 @@
+[package]
+name = "rdf-diff"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Frozen trait surface + differential harness for the verification-v1 sweep (ADR-0019 §2, ADR-0020)."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Shadow implementations are gated so main-parser builds never pull them.
+# See ADR-0019 §3 and ADR-0020 §1.
+default = []
+shadow = []
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }

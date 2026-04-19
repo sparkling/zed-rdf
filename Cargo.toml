@@ -1,0 +1,46 @@
+# Workspace root for zed-rdf — a Zed extension + Rust LSP for the RDF
+# family of languages. Crate topology is documented in
+# docs/sparc/03-architecture.md and ADR-0002. Members are added as each
+# crate lands per docs/sparc/04-refinement.md.
+
+[workspace]
+resolver = "3"
+members = [
+    # verification-v1 sweep (ADR-0020 §1.4) — frozen trait surface for the
+    # diff harness, shadow parsers, and oracle adapters. Kept under
+    # crates/testing/ because it is test-only; main-parser builds do not
+    # depend on it.
+    "crates/testing/rdf-diff",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/henrikpettersen/zed-rdf"
+homepage = "https://github.com/henrikpettersen/zed-rdf"
+authors = ["Henrik Pettersen <henrik.pettersen@gmail.com>"]
+# Per ADR-0001 we target latest stable with no MSRV commitment. This
+# `rust-version` field is informational only and bumped freely.
+rust-version = "1.86"
+
+# Workspace-level lints, inherited via `[lints] workspace = true` in
+# each crate. Per ADR-0001 we forbid unsafe by default; per ADR-0005 we
+# want missing-docs to surface.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+rust_2024_compatibility = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Shared dependency versions. Crates inherit via
+# `some_crate = { workspace = true }`. The list grows with each phase.
+# Curated per ADR-0004 — additions require an ADR amendment.
+[workspace.dependencies]
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

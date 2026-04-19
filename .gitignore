@@ -1,0 +1,37 @@
+# Rust
+/target/
+**/target/
+Cargo.lock.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/logs/
+
+# Coverage
+/tarpaulin-report.html
+/lcov.info
+/.coverage/
+
+# Fuzzing
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/coverage/
+/fuzz/target/
+
+# RuFlo / Claude-Flow runtime state
+/.claude-flow/
+/.swarm/
+
+# Build artefacts
+/dist/
+/out/
