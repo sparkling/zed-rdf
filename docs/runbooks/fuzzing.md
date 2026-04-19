@@ -26,6 +26,48 @@ CI workflows:
 - `.github/workflows/fuzz-nightly.yml` — 30 min per target nightly,
   with corpus minimisation (`cargo fuzz cmin`) and artifact upload.
 
+### CI matrix (verified 2026-04-19 against HEAD `2dd83ab`)
+
+Both workflows enumerate the same eight `(crate, target)` cells; the
+matrix is `fail-fast: false` so one target's crash never masks another.
+Bumping this list means editing both workflow files **and** the
+"Layout" table above in lockstep — there is no generator.
+
+| Crate          | Targets                                                  |
+| -------------- | -------------------------------------------------------- |
+| `rdf-iri`      | `parse`, `resolve`, `normalise_idempotence`              |
+| `rdf-ntriples` | `parse_ntriples`, `parse_nquads`                         |
+| `rdf-turtle`   | `parse_turtle`, `parse_trig`, `bnode_scope_invariants`   |
+
+### Nightly toolchain pin
+
+`cargo-fuzz` needs nightly for `-Z build-std` + sanitizer plumbing, so
+the workspace-root `rust-toolchain.toml` (stable + `wasm32-wasip2`) is
+**deliberately not changed**. Each fuzz workflow instead pins
+`FUZZ_TOOLCHAIN: nightly-2026-03-01` and installs it via
+`dtolnay/rust-toolchain@master` with `components: rust-src`. Bumping
+the pin is a routine PR; do both `fuzz-smoke.yml` and
+`fuzz-nightly.yml` in the same change.
+
+### Cache key strategy
+
+Both workflows use `Swatinem/rust-cache@v2` keyed on
+`shared-key: fuzz-<workflow>-<crate>` with
+`workspaces: crates/<crate>/fuzz`. Consequences:
+
+- Cache is **per-crate**, not per-target — all targets inside a crate
+  share one build cache, which is correct because they link the same
+  dependency closure.
+- `save-if: ${{ github.ref == 'refs/heads/main' }}` means PR runs read
+  the cache but never write it. This prevents a long-running fuzz PR
+  from poisoning `main`'s cache with stale artefacts.
+- Smoke and nightly have **separate** cache namespaces (`fuzz-smoke-*`
+  vs `fuzz-nightly-*`). They never cross-pollinate — nightly's
+  coverage-instrumented build differs enough that sharing would cost
+  more than it saves.
+- Corpora are not cached here; they are shipped between runs via the
+  `fuzz-nightly-corpus-<crate>-<target>` artifact, retention 30 days.
+
 ## Prerequisites
 
 `cargo-fuzz` needs a nightly toolchain (`-Z build-std`, sanitizer

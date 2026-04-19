@@ -239,18 +239,24 @@ fn print_help() {
     );
 }
 
-/// Package names whose coverage is hard-gated at 70 % line coverage.
-/// Kept in lockstep with `.github/workflows/coverage.yml`.
-const COVERAGE_HARD_GATED_PACKAGES: &[&str] = &[
-    "rdf-iri",
-    "rdf-ntriples",
-    "rdf-turtle",
-    "rdf-diagnostics",
+/// Per-crate coverage hard gates. Kept in lockstep with
+/// `.github/workflows/coverage.yml` (the `Gate <pkg>` steps) and with
+/// `docs/verification/coverage-baseline.md` (the `BASELINE` table).
+///
+/// The thresholds differ per crate — see the runbook for the rationale.
+/// A single workspace-wide `--fail-under-lines N` would either under-
+/// protect the small simple crates or over-protect the large grammar,
+/// so we gate each crate individually.
+const COVERAGE_HARD_GATES: &[(&str, u8)] = &[
+    ("rdf-diagnostics", 80),
+    ("rdf-iri", 70),
+    ("rdf-ntriples", 75),
+    ("rdf-turtle", 70),
 ];
 
-/// Hard-gate threshold, percent. Single source of truth for both the
-/// workflow and the xtask wrapper.
-const COVERAGE_FAIL_UNDER_LINES: u8 = 70;
+/// Path (relative to the workspace root) of the drift-guard script used
+/// by CI and mirrored here.
+const COVERAGE_DRIFT_SCRIPT: &str = "scripts/coverage-drift.sh";
 
 /// Run `cargo llvm-cov` locally — the `xtask verify --coverage`
 /// convenience path. We intentionally shell out rather than try to drive
@@ -301,12 +307,11 @@ fn run_coverage() -> Result<ExitCode, String> {
     //    whole wrapper — we keep going across the rest so the developer
     //    sees every failing crate in a single run rather than one at a
     //    time. Matches the CI workflow's step-by-step `cargo llvm-cov
-    //    report --package ... --fail-under-lines 70` sequence.
+    //    report --package <pkg> --fail-under-lines N` sequence, where N
+    //    is per-crate (see COVERAGE_HARD_GATES).
     let mut any_gate_failed = false;
-    for pkg in COVERAGE_HARD_GATED_PACKAGES {
-        eprintln!(
-            "xtask verify --coverage: gate {pkg} at {COVERAGE_FAIL_UNDER_LINES}% line coverage"
-        );
+    for (pkg, threshold) in COVERAGE_HARD_GATES {
+        eprintln!("xtask verify --coverage: gate {pkg} at {threshold}% line coverage");
         let status = Command::new("cargo")
             .args([
                 "llvm-cov",
@@ -314,22 +319,52 @@ fn run_coverage() -> Result<ExitCode, String> {
                 "--package",
                 pkg,
                 "--fail-under-lines",
-                &COVERAGE_FAIL_UNDER_LINES.to_string(),
+                &threshold.to_string(),
             ])
             .status()
             .map_err(|e| format!("failed to spawn `cargo llvm-cov report`: {e}"))?;
         if !status.success() {
-            eprintln!(
-                "xtask verify --coverage: {pkg} below {COVERAGE_FAIL_UNDER_LINES}% line coverage"
-            );
+            eprintln!("xtask verify --coverage: {pkg} below {threshold}% line coverage");
             any_gate_failed = true;
         }
     }
 
-    // 3. Warn-only workspace summary. Informational — never fails.
+    // 3. Drift guard. Compares the measured per-crate coverage against
+    //    the committed baseline in docs/verification/coverage-baseline.md.
+    //    Mirrors the CI step of the same name; a green local run
+    //    predicts a green CI run.
+    if let Ok(root) = repo_root() {
+        let script = root.join(COVERAGE_DRIFT_SCRIPT);
+        if script.is_file() {
+            eprintln!("xtask verify --coverage: running drift guard");
+            let status = Command::new("bash")
+                .arg(&script)
+                .current_dir(&root)
+                .status()
+                .map_err(|e| format!("failed to spawn drift-guard: {e}"))?;
+            if !status.success() {
+                eprintln!(
+                    "xtask verify --coverage: drift guard reported regression(s) \
+                     — see table above"
+                );
+                any_gate_failed = true;
+            }
+        } else {
+            eprintln!(
+                "xtask verify --coverage: drift-guard script {} absent; skipping drift check",
+                script.display()
+            );
+        }
+    }
+
+    // 4. Warn-only workspace summary. Informational — never fails.
+    //    `cargo llvm-cov report` (no `--package`, no `--workspace`)
+    //    defaults to summarising every file in the profdata set;
+    //    current cargo-llvm-cov rejects `--workspace` on `report`
+    //    (accepted only on the top-level `llvm-cov` subcommand).
     eprintln!("xtask verify --coverage: workspace summary (warn-only)");
     let _ = Command::new("cargo")
-        .args(["llvm-cov", "report", "--workspace"])
+        .args(["llvm-cov", "report"])
         .status();
 
     if any_gate_failed {

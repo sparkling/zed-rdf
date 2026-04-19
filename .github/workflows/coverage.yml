@@ -1,20 +1,27 @@
-# Per-crate coverage gate (ADR-0020 §1.2).
+# Per-crate coverage gate (ADR-0020 §1.2, carry-over-v2 tuning pass).
 #
 # Runs `cargo-llvm-cov` across the workspace on every PR and on a weekly
 # cron. Produces `lcov.info` (uploaded as an artefact on every run) plus
-# per-crate summaries for the Phase-A main parsers. The main parser set
-# (`rdf-iri`, `rdf-ntriples`, `rdf-turtle`, `rdf-diagnostics`) is hard-
-# gated at 70 % line coverage via `--fail-under-lines 70`; other members
-# run warn-only so the gate stays focused on the parsers Phase-A owns
-# end-to-end.
+# per-crate summaries. Phase-A main parsers (`rdf-iri`, `rdf-ntriples`,
+# `rdf-turtle`, `rdf-diagnostics`) are hard-gated with **per-crate
+# thresholds** tuned in `docs/verification/coverage-baseline.md`.
+# `cargo-llvm-cov` applies `--fail-under-lines` workspace-wide, so each
+# gate is its own invocation below.
+#
+# A drift-guard step then re-reads the per-crate baseline from
+# `docs/verification/coverage-baseline.md` and fails the run if any
+# tracked crate has regressed by more than 3 percentage points against
+# the committed baseline. That turns the baseline file into a ratchet:
+# when coverage improves you bump the row in the same PR and the new
+# floor sticks.
 #
 # No external upload: ADR-0020 has not authorised a Codecov token. When
 # that amendment lands a follow-up patch wires the upload action here.
 #
-# Claim (ADR-0020 §1.2 carry-over): `.github/workflows/coverage.yml`.
-# Coordinated with `cu-xtask-expand` — this workflow invokes
-# `cargo llvm-cov` directly; the xtask adds a local convenience wrapper
-# exposing the same thresholds (`xtask verify --coverage`).
+# Claim (ADR-0020 §1.2 carry-over): `.github/workflows/coverage.yml`,
+# `docs/verification/coverage-baseline.md`, `scripts/coverage-drift.sh`.
+# Coordinated with `cu2-fuzz-ci` — this workflow does not touch the
+# fuzz harnesses.
 
 name: coverage
 
@@ -40,6 +47,9 @@ env:
   # cargo-llvm-cov drops its working state here; mirrored in the
   # runbook at docs/runbooks/coverage.md.
   COVERAGE_OUTPUT_DIR: target/llvm-cov
+  # Drift tolerance — baseline regressions larger than this fail the
+  # gate (see docs/verification/coverage-baseline.md §3).
+  DRIFT_TOLERANCE_PP: '3.00'
 
 jobs:
   coverage:
@@ -77,8 +87,10 @@ jobs:
           tool: cargo-llvm-cov
 
       # Workspace-wide run. Produces the lcov report consumed by the
-      # artefact-upload step below. `--workspace --all-features` mirrors
-      # the verification workflow so coverage reflects the tested
+      # artefact-upload step below *and* populates the per-crate
+      # profdata cache so the subsequent `cargo llvm-cov report
+      # --package <pkg>` invocations are fast. `--workspace --all-features`
+      # mirrors the verification workflow so coverage reflects the tested
       # surface. We let cargo-llvm-cov apply its own defaults for which
       # targets to include — build-scripts, tests, and xtask are
       # ignored by convention (see the `cargo-llvm-cov --help` section
@@ -104,35 +116,53 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # Per-crate hard gates. Each invocation re-uses the workspace
-      # `target/llvm-cov-target` profdata cache that the first run
-      # populated, so incremental cost is low. `--fail-under-lines 70`
-      # exits non-zero when line coverage drops below 70 % for the
-      # named package.
+      # Per-crate hard gates. Each invocation reuses the workspace
+      # `target/llvm-cov-target` profdata cache populated above. Thresholds
+      # differ per crate (see docs/verification/coverage-baseline.md §2):
+      #
+      #   rdf-diagnostics  80%  small, simple; should easily clear
+      #   rdf-iri          70%  IDN fallback + resolve edges still unflushed
+      #   rdf-ntriples     75%  single-file parser; tight floor
+      #   rdf-turtle       70%  largest grammar in Phase A
+      #
+      # `--fail-under-lines N` exits non-zero when line coverage for the
+      # named package drops below N %.
+      - name: Gate rdf-diagnostics at 80% line coverage
+        run: cargo llvm-cov report
+             --package rdf-diagnostics
+             --fail-under-lines 80
+
       - name: Gate rdf-iri at 70% line coverage
         run: cargo llvm-cov report
              --package rdf-iri
              --fail-under-lines 70
 
-      - name: Gate rdf-ntriples at 70% line coverage
+      - name: Gate rdf-ntriples at 75% line coverage
         run: cargo llvm-cov report
              --package rdf-ntriples
-             --fail-under-lines 70
+             --fail-under-lines 75
 
       - name: Gate rdf-turtle at 70% line coverage
         run: cargo llvm-cov report
              --package rdf-turtle
              --fail-under-lines 70
 
-      - name: Gate rdf-diagnostics at 70% line coverage
-        run: cargo llvm-cov report
-             --package rdf-diagnostics
-             --fail-under-lines 70
+      # Drift guard. Compares the measured per-crate coverage against
+      # the committed baseline in docs/verification/coverage-baseline.md
+      # and fails the gate if any tracked crate has regressed by more
+      # than $DRIFT_TOLERANCE_PP percentage points. The baseline file
+      # is authoritative — bump it when coverage legitimately improves.
+      - name: Coverage drift guard (vs committed baseline)
+        run: ./scripts/coverage-drift.sh
 
       # Warn-only summary for every other workspace member. We don't
       # want a weak coverage number on a helper crate (e.g. the diff
       # harness stubs) to block a Phase-A parser PR, but we still want
       # the numbers printed in the log so reviewers see trends.
+      # `cargo llvm-cov report` without `--package`/`--workspace`
+      # summarises every file in the profdata set; current cargo-llvm-cov
+      # rejects `--workspace` on `report` (accepted only on the top-level
+      # `llvm-cov` subcommand, which we already ran above).
       - name: Warn-only summary (all workspace members)
         if: always()
-        run: cargo llvm-cov report --workspace
+        run: cargo llvm-cov report

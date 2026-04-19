@@ -1,9 +1,15 @@
 # Runbook — coverage with `cargo-llvm-cov`
 
-Owner: `cu-coverage` (ADR-0020 §1.2 carry-over).
-Scope: per-crate line-coverage measurement + the Phase-A 70 % hard gate.
-Companions: [`.github/workflows/coverage.yml`](../../.github/workflows/coverage.yml),
-[`xtask/verify/src/main.rs`](../../xtask/verify/src/main.rs).
+Owner: `cu-coverage` (ADR-0020 §1.2) + `cu2-cov-thresholds` (carry-over-v2).
+Scope: per-crate line-coverage measurement, per-crate hard gates tuned
+in the baseline file, and the drift-guard ratchet.
+Companions:
+
+- [`.github/workflows/coverage.yml`](../../.github/workflows/coverage.yml)
+- [`xtask/verify/src/main.rs`](../../xtask/verify/src/main.rs)
+- [`scripts/coverage-drift.sh`](../../scripts/coverage-drift.sh)
+- [`docs/verification/coverage-baseline.md`](../verification/coverage-baseline.md)
+  — authoritative ratchet file.
 
 ## 1. What this is
 
@@ -43,20 +49,26 @@ the install hint above.
 cargo run -p xtask -- verify --coverage
 ```
 
-This does three things in order:
+This does four things in order:
 
 1. `cargo llvm-cov --workspace --all-features --locked --lcov
    --output-path lcov.info` — builds every member with coverage
    instrumentation, runs the workspace test suite, and writes an LCOV
    report to `lcov.info` in the repo root.
-2. Runs `cargo llvm-cov report --package <pkg> --fail-under-lines 70`
-   for each package in the hard-gate set (§3). The first failing gate
-   does **not** short-circuit — the wrapper keeps going so one run
-   surfaces every failing crate.
-3. Prints a warn-only `cargo llvm-cov report --workspace` summary.
+2. Runs `cargo llvm-cov report --package <pkg> --fail-under-lines N`
+   for each row in the hard-gate set (§3), where `N` is the row's
+   `threshold`. The first failing gate does **not** short-circuit — the
+   wrapper keeps going so one run surfaces every failing crate.
+3. Runs [`scripts/coverage-drift.sh`](../../scripts/coverage-drift.sh),
+   which compares today's measured line-cover against the committed
+   baseline in
+   [`docs/verification/coverage-baseline.md`](../verification/coverage-baseline.md)
+   and fails if any tracked crate has regressed by more than
+   `DRIFT_TOLERANCE_PP` (default 3 pp).
+4. Prints a warn-only `cargo llvm-cov report --workspace` summary.
 
-Exit code: `0` on all gates passing, `1` on any gate failure or on
-cargo-llvm-cov itself returning non-zero.
+Exit code: `0` on all gates + drift guard passing, `1` on any gate
+failure, drift regression, or cargo-llvm-cov itself returning non-zero.
 
 ### 2.3 Running `cargo llvm-cov` directly
 
@@ -73,36 +85,99 @@ artefact does not. Use it when triaging a specific regression.
 
 ## 3. Threshold matrix
 
-| Package           | Gate              | Rationale                                                                         |
-|-------------------|-------------------|-----------------------------------------------------------------------------------|
-| `rdf-iri`         | **hard**, 70 %    | Phase-A parser (ADR-0017 §4). Drives IRI resolution across every downstream lang. |
-| `rdf-ntriples`    | **hard**, 70 %    | Phase-A parser (ADR-0017 §4). Smallest surface; anything below 70 % is a smell.   |
-| `rdf-turtle`      | **hard**, 70 %    | Phase-A parser (ADR-0017 §4). Largest grammar in Phase A; the hardest to keep up. |
-| `rdf-diagnostics` | **hard**, 70 %    | Shared diagnostic infra (ADR-0018 Wave 1). Regressions here silently poison UX.   |
-| everything else   | warn-only         | Test-harness, shadow, and xtask crates — exercised indirectly.                    |
+Thresholds are tuned per-crate in the **authoritative baseline file**:
+[`docs/verification/coverage-baseline.md`](../verification/coverage-baseline.md).
+Current matrix (reproduced here for convenience; the baseline file is
+the source of truth — if they disagree, the baseline file wins):
 
-Two sources of truth to keep in sync when tuning:
+| Package           | Gate              | Baseline | Rationale                                                                             |
+|-------------------|-------------------|---------:|---------------------------------------------------------------------------------------|
+| `rdf-diagnostics` | **hard**, 80 %    |    91.19 | Shared diagnostic infra (ADR-0018 Wave 1). Small + simple — should easily clear.      |
+| `rdf-iri`         | **hard**, 70 %    |    84.39 | Phase-A parser. IDN fallback + resolve edges still need future coverage.              |
+| `rdf-ntriples`    | **hard**, 75 %    |    80.38 | Phase-A parser. Single-file; tight floor keeps accidental regressions visible.        |
+| `rdf-turtle`      | **hard**, 70 %    |    77.84 | Phase-A parser. Largest grammar in Phase A; the hardest to keep up.                   |
+| `rdf-diff`        | warn-only         |    94.04 | Harness crate, exercised via downstream parser tests.                                 |
+| everything else   | warn-only         |        — | Shadow, oracle, and xtask crates — exercised indirectly.                              |
 
-1. `COVERAGE_HARD_GATED_PACKAGES` / `COVERAGE_FAIL_UNDER_LINES` in
-   `xtask/verify/src/main.rs`.
-2. The four `Gate <pkg>` steps in `.github/workflows/coverage.yml`.
+Three sources of truth to keep in sync when tuning:
 
-When you change one, change the other in the same PR — a drift is
+1. [`docs/verification/coverage-baseline.md`](../verification/coverage-baseline.md)
+   — the `BASELINE` table (parsed by `scripts/coverage-drift.sh`).
+2. `COVERAGE_HARD_GATES` in `xtask/verify/src/main.rs`.
+3. The `Gate <pkg>` steps in `.github/workflows/coverage.yml`.
+
+When you change one, change the others in the same PR — a drift is
 always a bug.
 
 ### 3.1 Tuning the threshold
 
-Two reasons you might want to move the 70 % floor:
+Procedure for moving a hard-gate threshold (raise or lower):
 
-- **Raise it.** Preferred direction once a parser stabilises. Bump in
-  both files, land the PR, leave the new floor documented here.
-- **Lower it (transiently).** Only acceptable to unblock a landing of a
-  planned refactor. Open an issue, note the expected recovery timeline,
-  and revert the threshold within two sweeps. Do not lower below 60 %
-  without an ADR amendment — below that we lose the signal.
+1. Edit the `threshold` column in the baseline file for the affected
+   row.
+2. Edit the corresponding entry in `COVERAGE_HARD_GATES`
+   (`xtask/verify/src/main.rs`).
+3. Edit the corresponding `Gate <pkg>` step in
+   `.github/workflows/coverage.yml`.
+4. Append a short paragraph to the baseline file's §4 (Adjustments log)
+   with the rationale — when coverage moves, we want the history.
 
-Changing the gated-crate set requires an ADR amendment (ADR-0020 §1.2
-is explicit about which four crates are hard-gated).
+Direction guidance:
+
+- **Raise the threshold.** Preferred direction once a parser stabilises.
+  Ratchets the floor; matches the baseline ratchet (§3.3 below).
+- **Lower the threshold (transiently).** Only acceptable to unblock a
+  landing of a planned refactor. Open an issue, note the expected
+  recovery timeline, and revert the threshold within two sweeps. Do
+  not lower below 60 % without an ADR amendment — below that we lose
+  the signal.
+- **Day-one adjustment.** If a newly-added hard-gated crate has a
+  baseline below its proposed threshold, lower the threshold to
+  `baseline − 5 pp` and document the expected recovery in §4 of the
+  baseline file. (Not needed for the initial 2026-04-19 baseline — all
+  four hard-gated crates are already above their thresholds.)
+
+Changing the gated-crate **set** (adding or removing a package from
+the hard-gate list) requires an ADR amendment (ADR-0020 §1.2 is
+explicit about which crates are hard-gated).
+
+### 3.2 Drift guard (ratchet)
+
+The [`scripts/coverage-drift.sh`](../../scripts/coverage-drift.sh)
+step re-reads the `BASELINE` table in the baseline file on every CI
+run and every `xtask verify --coverage` invocation. For each row:
+
+- **hard-gated rows** (numeric `threshold`) fail the gate when
+  - `measured < threshold` (the existing `--fail-under-lines` rule, and
+    the drift-guard's sanity check), *or*
+  - `measured − baseline < -3.00` (regression larger than tolerance).
+- **warn-only rows** print the delta but never fail.
+
+The tolerance (`DRIFT_TOLERANCE_PP`, default `3.00`) is overridable by
+env var for debugging but must not be loosened in CI without an entry
+in the baseline file's §4.
+
+### 3.3 Ratcheting the baseline
+
+When coverage legitimately improves (e.g. new tests landed), bump the
+`baseline` column for the affected row in the same PR that lands the
+improvement. The drift guard then holds the new, higher floor — any
+future regression greater than 3 pp against the improved baseline
+fails CI. This is how the ratchet earns its keep: you never need to
+remember to raise a threshold — just keep the baseline honest.
+
+If coverage legitimately regresses (e.g. a deliberate refactor removed
+a test path), lower the `baseline` column **and** add a row in the
+baseline file's §4 explaining why. Do not touch `threshold` for a
+legitimate regression unless the regression pushed the baseline below
+the threshold; in that case see §3.1.
+
+### 3.4 Regenerating the baseline
+
+See the baseline file's §5 — a short script-in-the-clear that dumps
+per-package line cover and is meant to be copy-pasted. Always run it
+from a clean tree (`cargo llvm-cov clean --workspace`) so stale
+profdata from previous partial runs cannot leak in.
 
 ## 4. Interpreting reports
 
@@ -163,23 +238,33 @@ rather than relying on the default.
 ## 6. Verifying the gate fires
 
 During the Phase-A sweep we deliberately broke a test to confirm the
-gate actually blocks a merge. Reproduce with:
+gate actually blocks a merge. Two failure modes to exercise:
+
+**Hard-gate failure.** In a scratch branch, comment out enough of a
+covered code path in `rdf-ntriples` so that its line coverage drops
+below 75 %. Run the wrapper:
 
 ```bash
-# In a scratch branch:
-# 1. Comment out enough of a covered code path in rdf-ntriples so that
-#    its line coverage drops below 70%.
-# 2. Run the wrapper.
 cargo run -p xtask -- verify --coverage
-
 # Expected:
-# xtask verify --coverage: rdf-ntriples below 70% line coverage
+# xtask verify --coverage: rdf-ntriples below 75% line coverage
 # exit 1
 ```
 
-Push the branch, confirm the `coverage` workflow run goes red, then
-revert. **Never land the transient break** — it is a one-shot
-acceptance check.
+**Drift failure.** Edit the `baseline` column of `rdf-turtle` in
+`docs/verification/coverage-baseline.md` up by more than 3 pp
+(e.g. 77.84 → 82.00). Run the wrapper:
+
+```bash
+cargo run -p xtask -- verify --coverage
+# Expected drift-guard table row:
+# rdf-turtle   82.00   70   77.84   -4.16   FAIL: drifted -4.16 pp (tol -3.00)
+# exit 1
+```
+
+Push each scratch branch, confirm the `coverage` workflow run goes red,
+then revert. **Never land either transient break** — they are one-shot
+acceptance checks.
 
 ## 7. Known deviations / TODO
 
