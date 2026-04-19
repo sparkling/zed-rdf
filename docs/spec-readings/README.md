@@ -102,6 +102,7 @@ mechanically consume it.
 | `TTL-LITESC-001`   | `turtle/literal-escapes.md`                                        | active  |
 | `TTL-BNPFX-001`    | `turtle/bnode-prefix-rescope.md`                                   | active  |
 | `IRI-PCT-001`      | `iri/percent-encoding-3986-vs-3987.md`                             | active  |
+| `IRI-SURROGATE-001`| `iri/lone-surrogate-rejection.md`                                  | active  |
 | `ANY-BOM-001`      | `any/bom-handling.md`                                              | active  |
 | `SPARQL-LITCMP-001`| `sparql/literal-comparison.md`                                     | active  |
 | `JSONLD-KWALIAS-001`| `jsonld/keyword-aliasing.md`                                      | active  |

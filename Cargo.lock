@@ -515,6 +515,8 @@ dependencies = [
  "rdf-ntriples-shadow",
  "rdf-turtle",
  "rdf-turtle-shadow",
+ "sparql-syntax",
+ "sparql-syntax-shadow",
  "thiserror",
 ]
 
@@ -791,6 +793,16 @@ dependencies = [
  "oxrdf",
  "peg",
  "rand",
+ "thiserror",
+]
+
+[[package]]
+name = "sparql-syntax"
+version = "0.0.0"
+dependencies = [
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-iri",
  "thiserror",
 ]
 

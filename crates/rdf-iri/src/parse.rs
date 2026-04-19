@@ -79,7 +79,12 @@ pub fn parse(input: &str) -> Result<Iri, Diagnostic> {
     validate_userinfo(input, parts.userinfo)?;
     validate_host(input, parts.host)?;
     validate_port(input, parts.port)?;
-    validate_path(input, parts.path, parts.authority.is_some())?;
+    validate_path(
+        input,
+        parts.path,
+        parts.authority.is_some(),
+        parts.scheme.is_some(),
+    )?;
     validate_query_or_fragment(input, parts.query, "query")?;
     validate_query_or_fragment(input, parts.fragment, "fragment")?;
 
@@ -241,6 +246,7 @@ fn validate_path(
     input: &str,
     (a, b): (usize, usize),
     has_authority: bool,
+    has_scheme: bool,
 ) -> Result<(), Diagnostic> {
     if a == b {
         return Ok(());
@@ -269,10 +275,15 @@ fn validate_path(
         is_iunreserved(c) || is_sub_delim(c) || matches!(c, ':' | '@' | '/')
     })?;
 
-    // RFC 3986 §4.2: a relative-path reference's first segment cannot
-    // contain a colon — that would ambiguate with a scheme-prefixed
-    // absolute reference.
-    if !has_authority && !slice.starts_with('/') {
+    // RFC 3986 §4.2: a **relative-reference** (no scheme) with a
+    // relative-path (does not start with '/') must not have a ':' in
+    // its first segment — that would ambiguate with a scheme-prefixed
+    // absolute reference. Once a scheme has already been parsed, the
+    // IRI is absolute and §4.2 no longer applies: path-rootless and
+    // path-noscheme both accept `ipchar` which includes ':'. See
+    // RFC 3986 §3.3 and `docs/verification/adversary-findings/iri/divergences.md`
+    // bug #1.
+    if !has_scheme && !has_authority && !slice.starts_with('/') {
         let first_seg = slice.split('/').next().unwrap_or("");
         if first_seg.contains(':') {
             let offset = a + first_seg.find(':').unwrap_or(0);
@@ -308,21 +319,48 @@ fn validate_query_or_fragment(
 
 /// Walk a slice of `input[a..b]` and validate that every character is
 /// either `allow(c)` or the start of a valid `%HH` pct-encoded triplet.
+///
+/// Additionally enforces the `IRI-SURROGATE-001` pin
+/// (`docs/spec-readings/iri/lone-surrogate-rejection.md`): when two
+/// consecutive `%HH` triplets form the first two bytes of a UTF-8
+/// encoding in the surrogate range `U+D800..U+DFFF` (first byte
+/// `0xED`, second `0xA0..=0xBF`), the run is rejected with a fatal
+/// diagnostic. RFC 3987 Errata 3937 forbids these byte sequences from
+/// appearing in IRI references.
 fn validate_run<F: Fn(char) -> bool>(
     input: &str,
     a: usize,
     b: usize,
     allow: F,
 ) -> Result<(), Diagnostic> {
-    let slice = &input[a..b];
-    let mut chars = slice.char_indices();
-    while let Some((i, c)) = chars.next() {
-        if c == '%' {
+    let bytes = &input.as_bytes()[a..b];
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
             // Require two following hex digits.
-            let h1 = chars.next().map(|(_, c)| c);
-            let h2 = chars.next().map(|(_, c)| c);
+            let h1 = bytes.get(i + 1).copied();
+            let h2 = bytes.get(i + 2).copied();
             match (h1, h2) {
-                (Some(c1), Some(c2)) if c1.is_ascii_hexdigit() && c2.is_ascii_hexdigit() => {
+                (Some(c1), Some(c2))
+                    if c1.is_ascii_hexdigit() && c2.is_ascii_hexdigit() =>
+                {
+                    let decoded = hex_byte(c1, c2);
+                    // IRI-SURROGATE-001: if this triplet and the next
+                    // form a UTF-8 surrogate encoding
+                    // (0xED followed by 0xA0..=0xBF), reject.
+                    if decoded == 0xED
+                        && let Some(next_decoded) = peek_pct(bytes, i + 3)
+                        && (0xA0..=0xBF).contains(&next_decoded)
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticCode::SurrogatePct,
+                            "IRI-SURROGATE-001: pct-encoded byte sequence decodes to a \
+                             UTF-16 surrogate (U+D800..U+DFFF); forbidden by RFC 3987 \
+                             Errata 3937",
+                            Some(a + i),
+                        ));
+                    }
+                    i += 3;
                     continue;
                 }
                 _ => {
@@ -333,6 +371,9 @@ fn validate_run<F: Fn(char) -> bool>(
                 }
             }
         }
+        // Non-'%' byte: decode a full UTF-8 char to check `allow` and
+        // advance by its length. `input` is known-valid UTF-8.
+        let c = input[a + i..].chars().next().expect("non-empty slice");
         if !allow(c) {
             return Err(Diagnostic::new(
                 DiagnosticCode::Syntax,
@@ -340,8 +381,37 @@ fn validate_run<F: Fn(char) -> bool>(
                 Some(a + i),
             ));
         }
+        i += c.len_utf8();
     }
     Ok(())
+}
+
+/// Decode two ASCII hex digits into a byte. Caller must ensure both are
+/// valid hex digits.
+const fn hex_byte(h1: u8, h2: u8) -> u8 {
+    const fn nyb(b: u8) -> u8 {
+        if b.is_ascii_digit() {
+            b - b'0'
+        } else if b >= b'a' {
+            b - b'a' + 10
+        } else {
+            b - b'A' + 10
+        }
+    }
+    (nyb(h1) << 4) | nyb(h2)
+}
+
+/// If `bytes[pos..pos+3]` is a valid `%HH` triplet, return the decoded
+/// byte; otherwise `None`.
+fn peek_pct(bytes: &[u8], pos: usize) -> Option<u8> {
+    let pct = *bytes.get(pos)?;
+    let h1 = *bytes.get(pos + 1)?;
+    let h2 = *bytes.get(pos + 2)?;
+    if pct == b'%' && h1.is_ascii_hexdigit() && h2.is_ascii_hexdigit() {
+        Some(hex_byte(h1, h2))
+    } else {
+        None
+    }
 }
 
 // -----------------------------------------------------------------------

@@ -375,30 +375,41 @@ fn iri_003b_surrogate_rejection_fixture_present() {
 }
 
 /// **IRI-003b (diff)** — lone-surrogate percent-encoding
-/// (`%ED%A0%80`) is currently accepted by BOTH parsers.
+/// (`%ED%A0%80`) is rejected by both parsers.
 ///
 /// RFC 3987 Errata 3937 clarifies that surrogates must never appear as
 /// Unicode scalar values in IRIs and must not appear as
-/// percent-encoded octets except in legacy contexts. Neither parser
-/// decodes percent-encoding during parse or normalise, so the lone
-/// surrogate stays opaque and both accept. The brief's hypothesised
-/// `AcceptRejectSplit` therefore does NOT fire; the finding is a
-/// shared under-enforcement — both parsers permit a byte sequence
-/// RFC 3987 disallows. Recorded in `iri/divergences.md`.
+/// percent-encoded octets except in legacy contexts. The pin
+/// `docs/spec-readings/iri/lone-surrogate-rejection.md`
+/// (`IRI-SURROGATE-001`) encodes this reading; both main and shadow
+/// now decode pct-encoded triplet pairs at validation time and emit a
+/// fatal diagnostic when the bytes form a UTF-8 surrogate encoding
+/// (`0xED` followed by `0xA0..=0xBF`). Prior outcome — shared
+/// under-enforcement — is closed; see the "RESOLVED" row in
+/// `iri/divergences.md`.
 #[test]
 fn iri_003b_surrogate_rejected_by_strict_parser() {
     let _bytes = std::fs::read(fixture_dir().join("iri-003-surrogate-rejection.nt"))
         .expect("fixture loadable");
 
     let p = Probe::new("http://example/path/%ED%A0%80suffix");
-    // Recorded outcome: both accept and agree. Hypothesis did not
-    // fire; documented in the divergences file.
     assert_eq!(
         classify(&p),
-        "both-accept-same",
+        "both-reject",
         "IRI-003b: main={:?} shadow={:?}",
         p.main,
         p.shadow,
+    );
+    // Both parsers must cite IRI-SURROGATE-001.
+    let main_err = p.main.as_ref().expect_err("main rejects");
+    let shadow_err = p.shadow.as_ref().expect_err("shadow rejects");
+    assert!(
+        main_err.contains("IRI-SURROGATE-001"),
+        "main diagnostic must cite IRI-SURROGATE-001: {main_err}",
+    );
+    assert!(
+        shadow_err.contains("IRI-SURROGATE-001"),
+        "shadow diagnostic must cite IRI-SURROGATE-001: {shadow_err}",
     );
 }
 
@@ -485,34 +496,32 @@ fn iri_005_urn_absoluteness_fixture_present() {
     assert_fixture_present("iri-005-urn-absoluteness.nt");
 }
 
-/// **IRI-005 (diff)** — `urn:` and `tag:` surface a real main-parser
-/// bug: RFC 3986 §4.2 first-segment-colon check is applied to
-/// already-absolute references.
+/// **IRI-005 (diff)** — `urn:` and `tag:` and other authority-less
+/// absolute IRIs with a `:` in the path are now accepted by both
+/// parsers.
 ///
 /// RFC 3986 §4.2 forbids `:` in the first segment of a
 /// **relative-path reference** to disambiguate from a scheme. Once a
 /// scheme has been parsed (e.g., `urn:example:a-resource` → scheme
 /// `urn`, path `example:a-resource`), the reference is absolute and
-/// §4.2 no longer applies. The current main parser in
-/// `crates/rdf-iri/src/parse.rs` (`validate_path`) runs the check on
-/// every path whose `has_authority` is false, ignoring whether a
-/// scheme was parsed. Consequence: `urn:example:*`, `tag:*`, ISBN
-/// URNs, and any other authority-less absolute IRI with a `:` in the
-/// path is rejected.
+/// §4.2 no longer applies. Main's `validate_path` originally ran the
+/// §4.2 check on every path whose `has_authority` was false, ignoring
+/// whether a scheme was parsed — rejecting `urn:example:*`, `tag:*`,
+/// ISBN URNs, and similar authority-less absolute IRIs with a `:` in
+/// the path.
 ///
-/// This manifests as `AcceptRejectSplit` — main rejects, shadow
-/// accepts — for every non-trivial `urn:`/`tag:`. `data:,hello`
-/// escapes the bug because its path starts with `,hello` (no colon).
-///
-/// Bug owner: `rdf-iri` — the `§4.2` check should guard on
-/// `parts.scheme.is_none() && !has_authority`, not just
-/// `!has_authority`. Leaving the test active so CI catches the fix.
+/// See `docs/verification/adversary-findings/iri/divergences.md`
+/// bug #1 and `crates/rdf-iri/src/parse.rs::validate_path`. The guard
+/// now reads `!has_scheme && !has_authority && !slice.starts_with('/')`,
+/// aligning main with shadow. This test asserts the fix: all cases
+/// classify as `both-accept-same`.
 #[test]
 fn iri_005_authority_less_iris_accepted() {
     let _bytes = std::fs::read(fixture_dir().join("iri-005-urn-absoluteness.nt"))
         .expect("fixture loadable");
 
-    // data: passes through because its path has no colon.
+    // data: passes through because its path has no colon. Kept as a
+    // control: its acceptance never depended on the §4.2 guard.
     let p_data = Probe::new("data:,hello");
     assert_eq!(
         classify(&p_data),
@@ -522,8 +531,8 @@ fn iri_005_authority_less_iris_accepted() {
         p_data.shadow,
     );
 
-    // Every urn: / tag: case currently surfaces the §4.2-mis-scoped
-    // bug in main. This is the divergence the brief predicts.
+    // Post-fix: every urn: / tag: authority-less absolute now parses
+    // on both sides.
     for absolute in [
         "urn:example:a-resource",
         "urn:isbn:0451450523",
@@ -533,9 +542,9 @@ fn iri_005_authority_less_iris_accepted() {
         let p = Probe::new(absolute);
         assert_eq!(
             classify(&p),
-            "accept-reject-split:shadow-accepts",
-            "IRI-005: {absolute:?} expected AcceptRejectSplit (main-rejects) \
-             while the §4.2 bug stands. main={:?} shadow={:?}",
+            "both-accept-same",
+            "IRI-005: {absolute:?} expected both-accept-same after \
+             validate_path §4.2 scheme-aware fix. main={:?} shadow={:?}",
             p.main,
             p.shadow,
         );

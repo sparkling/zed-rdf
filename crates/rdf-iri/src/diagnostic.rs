@@ -9,6 +9,9 @@
 //! `docs/spec-readings/iri/percent-encoding-3986-vs-3987.md`:
 //!
 //! - `IRI-PCT-001` — percent-encoding / equality pin violation.
+//! - `IRI-SURROGATE-001` — pct-encoded byte sequence decodes to a
+//!   UTF-16 surrogate scalar (`U+D800..U+DFFF`); rejected per RFC 3987
+//!   Errata 3937.
 //! - `IRI-SYNTAX-001` — general RFC 3987 syntax rejection.
 //! - `IRI-SYNTAX-002` — authority / host syntax rejection.
 //! - `IRI-PORT-001` — port subcomponent syntax rejection.
@@ -26,6 +29,10 @@ use thiserror::Error;
 pub enum DiagnosticCode {
     /// IRI equality / percent-encoding pin violation.
     PercentEncoding,
+    /// Pct-encoded byte sequence decodes to a UTF-16 surrogate scalar
+    /// (`U+D800..U+DFFF`). See
+    /// `docs/spec-readings/iri/lone-surrogate-rejection.md`.
+    SurrogatePct,
     /// General RFC 3987 grammar rejection.
     Syntax,
     /// Authority or host subcomponent rejection.
@@ -45,6 +52,7 @@ impl DiagnosticCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PercentEncoding => "IRI-PCT-001",
+            Self::SurrogatePct => "IRI-SURROGATE-001",
             Self::Syntax => "IRI-SYNTAX-001",
             Self::Authority => "IRI-SYNTAX-002",
             Self::Port => "IRI-PORT-001",

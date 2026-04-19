@@ -57,6 +57,11 @@ members = [
     # `cargo tree -e normal` on it must show zero oracle edges. Claimed
     # by `v1-oracle-rust`.
     "crates/testing/rdf-diff-oracles",
+    # Main SPARQL 1.1 grammar parser (ADR-0017 §4, ADR-0018 Phase C,
+    # `phaseC-sparql`). Disjoint from `sparql-syntax-shadow`; both
+    # implement `rdf_diff::Parser` and are compared by the diff
+    # harness (ADR-0020 §1.4). Grammar-only — no execution semantics.
+    "crates/sparql-syntax",
 ]
 
 [workspace.package]

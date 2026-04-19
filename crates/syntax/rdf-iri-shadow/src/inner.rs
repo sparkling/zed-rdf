@@ -103,6 +103,21 @@ pub enum IriError {
         /// Human-readable description.
         detail: String,
     },
+
+    /// Pct-encoded byte sequence decodes to a value in the UTF-16
+    /// surrogate range `U+D800..U+DFFF`. RFC 3987 Errata 3937 forbids
+    /// this — the decoded scalar cannot represent a valid Unicode code
+    /// point. See `docs/spec-readings/iri/lone-surrogate-rejection.md`
+    /// (`IRI-SURROGATE-001`).
+    #[error(
+        "IRI-SURROGATE-001: pct-encoded byte sequence at offset {offset} decodes to a \
+         UTF-16 surrogate (U+D800..U+DFFF); forbidden by RFC 3987 Errata 3937"
+    )]
+    SurrogatePctEncoding {
+        /// Byte offset of the offending `%ED` triplet in the original
+        /// string.
+        offset: usize,
+    },
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -372,34 +387,60 @@ where
     }
 }
 
-/// Validate that every `%XX` sequence in `s` uses two valid hex digits.
-/// Returns an error at the first violation.
+/// Validate that every `%XX` sequence in `s` uses two valid hex digits,
+/// and that no triplet pair decodes into the UTF-16 surrogate range
+/// `U+D800..U+DFFF`.
+///
+/// A pct-encoded UTF-8 surrogate has the shape `%ED %Ax-%Bx %8x-%Bx`:
+/// RFC 3987 Errata 3937 forbids this sequence in IRI references because
+/// surrogate scalars are not valid Unicode code points. Detected via
+/// `IRI-SURROGATE-001` (see `docs/spec-readings/iri/lone-surrogate-rejection.md`).
+/// Returns at the first violation.
 fn validate_pct_encoding(s: &str) -> Result<(), IriError> {
     let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            if i + 2 >= bytes.len() {
-                return Err(IriError::BadPercentEncoding {
-                    offset: i,
-                    detail: "percent sign at end of string or too close to end".to_string(),
-                });
-            }
-            let h1 = bytes[i + 1];
-            let h2 = bytes[i + 2];
-            if !is_hex_digit(h1) || !is_hex_digit(h2) {
-                return Err(IriError::BadPercentEncoding {
-                    offset: i,
-                    detail: format!(
-                        "non-hex digits after '%': '{}''{}'",
-                        h1 as char, h2 as char
-                    ),
-                });
-            }
-            i += 3;
-        } else {
-            i += 1;
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'%' {
+            cursor += 1;
+            continue;
         }
+        // Must have two following hex digits.
+        if cursor + 2 >= bytes.len() {
+            return Err(IriError::BadPercentEncoding {
+                offset: cursor,
+                detail: "percent sign at end of string or too close to end".to_string(),
+            });
+        }
+        let hi = bytes[cursor + 1];
+        let lo = bytes[cursor + 2];
+        if !is_hex_digit(hi) || !is_hex_digit(lo) {
+            return Err(IriError::BadPercentEncoding {
+                offset: cursor,
+                detail: format!(
+                    "non-hex digits after '%': '{}''{}'",
+                    hi as char, lo as char
+                ),
+            });
+        }
+        let decoded = hex_to_byte(hi, lo);
+        // IRI-SURROGATE-001: pct-encoded UTF-8 surrogate starts with
+        // `%ED` and is followed by a triplet whose decoded byte is in
+        // 0xA0..=0xBF. We look one triplet ahead; if the next three
+        // bytes are a well-formed %HH, decode and check.
+        if decoded == 0xED {
+            let next_start = cursor + 3;
+            if next_start + 2 < bytes.len()
+                && bytes[next_start] == b'%'
+                && is_hex_digit(bytes[next_start + 1])
+                && is_hex_digit(bytes[next_start + 2])
+            {
+                let nxt = hex_to_byte(bytes[next_start + 1], bytes[next_start + 2]);
+                if (0xA0..=0xBF).contains(&nxt) {
+                    return Err(IriError::SurrogatePctEncoding { offset: cursor });
+                }
+            }
+        }
+        cursor += 3;
     }
     Ok(())
 }
@@ -828,6 +869,58 @@ mod tests {
     fn bad_pct_encoding_errors() {
         let r = parse(b"http://example.org/%GG");
         assert!(matches!(r, Err(IriError::BadPercentEncoding { .. })));
+    }
+
+    // ── IRI-SURROGATE-001 (RFC 3987 Errata 3937) ──────────────────────────
+    // pct-encoded byte sequences that decode to the UTF-16 surrogate
+    // range (U+D800..U+DFFF) must be rejected as fatal. The boundary
+    // case U+D7FF (encoded as %ED%9F%BF) is the last scalar before the
+    // range and must still be accepted.
+    // See docs/spec-readings/iri/lone-surrogate-rejection.md.
+
+    #[test]
+    fn surrogate_rejects_lone_high() {
+        // U+D800 UTF-8 = ED A0 80
+        let r = parse(b"http://example.org/%ED%A0%80");
+        assert!(
+            matches!(r, Err(IriError::SurrogatePctEncoding { .. })),
+            "expected SurrogatePctEncoding, got {r:?}",
+        );
+    }
+
+    #[test]
+    fn surrogate_rejects_lone_low() {
+        // U+DC00 UTF-8 = ED B0 80
+        let r = parse(b"http://example.org/%ED%B0%80");
+        assert!(matches!(r, Err(IriError::SurrogatePctEncoding { .. })));
+    }
+
+    #[test]
+    fn surrogate_rejects_encoded_pair() {
+        // Each half of a pct-encoded surrogate pair is independently
+        // invalid; reject at the first one.
+        let r = parse(b"http://example.org/%ED%A0%80%ED%B0%80");
+        assert!(matches!(r, Err(IriError::SurrogatePctEncoding { .. })));
+    }
+
+    #[test]
+    fn surrogate_accepts_just_below_range() {
+        // U+D7FF UTF-8 = ED 9F BF; the second byte (9F) is outside
+        // the surrogate window (A0..=BF) so the sequence is accepted.
+        let r = parse(b"http://example.org/%ED%9F%BF").unwrap();
+        assert_eq!(r.path, "/%ED%9F%BF");
+    }
+
+    #[test]
+    fn surrogate_rejected_in_query_and_fragment() {
+        assert!(matches!(
+            parse(b"http://example.org/?q=%ED%A0%80"),
+            Err(IriError::SurrogatePctEncoding { .. }),
+        ));
+        assert!(matches!(
+            parse(b"http://example.org/#%ED%A0%80"),
+            Err(IriError::SurrogatePctEncoding { .. }),
+        ));
     }
 
     // ── authority parsing ─────────────────────────────────────────────────

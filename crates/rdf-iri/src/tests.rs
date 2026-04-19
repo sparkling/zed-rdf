@@ -98,6 +98,120 @@ fn parse_rejects_control_char_in_path() {
 }
 
 // ----------------------------------------------------------------------
+// IRI-SURROGATE-001 pin (RFC 3987 Errata 3937).
+// A pct-encoded byte sequence that decodes to a value in the
+// surrogate range U+D800..U+DFFF (UTF-8: `0xED 0xA0..=0xBF 0x80..=0xBF`)
+// must be rejected as fatal. Boundary `%ED%9F%BF` (= U+D7FF, just
+// below surrogate range) must still be accepted.
+// See docs/spec-readings/iri/lone-surrogate-rejection.md.
+// ----------------------------------------------------------------------
+
+#[test]
+fn parse_rejects_pct_encoded_lone_high_surrogate() {
+    // %ED%A0%80 = UTF-8 encoding of U+D800 (lone high surrogate).
+    let err = Iri::parse("http://example/%ED%A0%80")
+        .expect_err("lone high surrogate must reject");
+    assert_eq!(err.code, DiagnosticCode::SurrogatePct);
+    assert_eq!(err.code.as_str(), "IRI-SURROGATE-001");
+}
+
+#[test]
+fn parse_rejects_pct_encoded_lone_low_surrogate() {
+    // %ED%B0%80 = UTF-8 encoding of U+DC00 (lone low surrogate).
+    let err = Iri::parse("http://example/%ED%B0%80")
+        .expect_err("lone low surrogate must reject");
+    assert_eq!(err.code, DiagnosticCode::SurrogatePct);
+}
+
+#[test]
+fn parse_rejects_pct_encoded_surrogate_pair() {
+    // A surrogate pair pct-encoded byte-for-byte is still invalid per
+    // Errata 3937 — the rejection is on each surrogate scalar
+    // independently, not on whether callers "meant" a supplementary
+    // code point.
+    let err = Iri::parse("http://example/%ED%A0%80%ED%B0%80")
+        .expect_err("pct-encoded surrogate pair must reject");
+    assert_eq!(err.code, DiagnosticCode::SurrogatePct);
+}
+
+#[test]
+fn parse_accepts_pct_encoded_just_below_surrogate() {
+    // %ED%9F%BF = UTF-8 encoding of U+D7FF, the last non-surrogate
+    // code point before the range. Boundary case — must be accepted.
+    let iri = Iri::parse("http://example/%ED%9F%BF")
+        .expect("U+D7FF boundary accepts");
+    assert_eq!(iri.path(), "/%ED%9F%BF");
+}
+
+#[test]
+fn parse_rejects_surrogate_in_query_and_fragment() {
+    let qerr = Iri::parse("http://example/?q=%ED%A0%80")
+        .expect_err("surrogate in query must reject");
+    assert_eq!(qerr.code, DiagnosticCode::SurrogatePct);
+    let ferr = Iri::parse("http://example/#%ED%A0%80")
+        .expect_err("surrogate in fragment must reject");
+    assert_eq!(ferr.code, DiagnosticCode::SurrogatePct);
+}
+
+// ----------------------------------------------------------------------
+// RFC 3986 §4.2 first-segment-colon rule: applies only to
+// **relative-references** (no scheme). Absolute IRIs with a scheme may
+// include ':' freely in path segments. See
+// docs/verification/adversary-findings/iri/divergences.md bug #1.
+// ----------------------------------------------------------------------
+
+#[test]
+fn parse_accepts_urn_example_foo() {
+    // Classic URN: scheme=urn, path=example:foo. The two colons in the
+    // path are legal per RFC 3986 §3.3 because the IRI is absolute.
+    let iri = Iri::parse("urn:example:foo").expect("urn:example:foo must parse");
+    assert_eq!(iri.scheme(), Some("urn"));
+    assert_eq!(iri.authority(), None);
+    assert_eq!(iri.path(), "example:foo");
+    assert!(iri.is_absolute());
+}
+
+#[test]
+fn parse_accepts_urn_isbn() {
+    // RFC 3187 ISBN URN.
+    let iri = Iri::parse("urn:isbn:0-486-27557-4").expect("ISBN URN must parse");
+    assert_eq!(iri.scheme(), Some("urn"));
+    assert_eq!(iri.path(), "isbn:0-486-27557-4");
+}
+
+#[test]
+fn parse_accepts_tag_uri() {
+    // RFC 4151 tag URI with comma + colon in the path.
+    let iri = Iri::parse("tag:example.com,2026:bar").expect("tag URI must parse");
+    assert_eq!(iri.scheme(), Some("tag"));
+    assert_eq!(iri.path(), "example.com,2026:bar");
+}
+
+#[test]
+fn parse_rejects_relative_ref_with_colon_in_first_segment() {
+    // Regression guard: §4.2 still applies when there is no scheme.
+    // A scheme must start with ALPHA (RFC 3986 §3.1), so `1a:b/c`
+    // cannot be parsed as scheme + path — the whole input is a
+    // relative-path reference whose first segment `1a:b` contains a
+    // colon. This is exactly the ambiguity §4.2 forbids.
+    let err = Iri::parse("1a:b/c").expect_err(
+        "relative reference with ':' in first path segment must be rejected (RFC 3986 §4.2)",
+    );
+    assert_eq!(err.code, DiagnosticCode::Syntax);
+}
+
+#[test]
+fn parse_accepts_relative_ref_dot_segment_workaround() {
+    // RFC 3986 §4.2 notes that `./foo:bar` is the documented workaround
+    // for getting a colon into the first path segment of a relative
+    // reference: the `.` is a distinct first segment, so `foo:bar`
+    // sits in the second segment where colons are unrestricted.
+    let iri = Iri::parse("./foo:bar").expect("./foo:bar is a valid relative reference");
+    assert!(!iri.is_absolute());
+    assert_eq!(iri.path(), "./foo:bar");
+}
+
+// ----------------------------------------------------------------------
 // IRI-PCT-001 pin: no silent normalisation at parse time.
 // ----------------------------------------------------------------------
 

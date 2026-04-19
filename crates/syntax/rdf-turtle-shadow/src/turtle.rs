@@ -625,8 +625,15 @@ ex:s ex:p "42"^^<http://www.w3.org/2001/XMLSchema#integer> .
         let facts = parse_ok(ttl);
         assert_eq!(facts.set.len(), 3);
         let objs = fact_objects(&facts);
-        assert!(objs.iter().any(|o| o.contains("xsd:string") || o.contains("XMLSchema#string")));
+        // Plain literals canonicalise to `"lex"` with implicit xsd:string
+        // per RDF 1.1 §3.3 / the canonical-form contract in
+        // `rdf-diff` — the explicit datatype is stripped on both sides.
+        assert!(objs.iter().any(|o| o == "\"hello\""), "objects: {objs:?}");
         assert!(objs.iter().any(|o| o.ends_with("@en")));
+        assert!(
+            objs.iter().any(|o| o.contains("XMLSchema#integer")),
+            "objects: {objs:?}"
+        );
     }
 
     #[test]

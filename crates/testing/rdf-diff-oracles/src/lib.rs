@@ -98,10 +98,8 @@ pub(crate) fn fatal<E: core::fmt::Display>(parser_id: &str, err: E) -> Diagnosti
 // Smoke test — round-trips a trivial Turtle document through each
 // enabled adapter and asserts the resulting `Facts` are canonically
 // equal. Per ADR-0020 §1.4 the canonical form is produced by
-// `Facts::canonicalise`, which is stubbed with `todo!()` until the
-// `v1-diff-core` agent fills it; the assertions below are therefore
-// gated with `#[ignore]` in the same pattern as the property tests in
-// `crates/testing/rdf-diff/tests/properties.rs`.
+// `Facts::canonicalise` (now implemented in `rdf-diff`); the smoke
+// assertions below run unconditionally.
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -135,7 +133,6 @@ mod smoke {
 
     #[cfg(feature = "oracle-oxttl")]
     #[test]
-    #[ignore = "unignore once v1-diff-core fills Facts::canonicalise"]
     fn oxttl_round_trips_trivial_turtle() {
         let parser = super::oxttl_adapter::Adapter::new();
         let facts = parse_or_panic(&parser, TRIVIAL_TTL);
@@ -144,7 +141,6 @@ mod smoke {
 
     #[cfg(feature = "oracle-sophia")]
     #[test]
-    #[ignore = "unignore once v1-diff-core fills Facts::canonicalise"]
     fn sophia_round_trips_trivial_turtle() {
         let parser = super::sophia_adapter::Adapter::new();
         let facts = parse_or_panic(&parser, TRIVIAL_TTL);
@@ -156,7 +152,6 @@ mod smoke {
     /// in the harness crate, not here.
     #[cfg(all(feature = "oracle-oxttl", feature = "oracle-sophia"))]
     #[test]
-    #[ignore = "unignore once v1-diff-core fills Facts::canonicalise"]
     fn oxttl_and_sophia_agree_on_trivial_turtle() {
         let oxttl = super::oxttl_adapter::Adapter::new();
         let sophia = super::sophia_adapter::Adapter::new();
@@ -164,8 +159,13 @@ mod smoke {
         let a = parse_or_panic(&oxttl, TRIVIAL_TTL);
         let b = parse_or_panic(&sophia, TRIVIAL_TTL);
 
+        // Compare canonical fact keys only. `FactProvenance` values
+        // carry the emitting parser id and are expected to differ
+        // between oracles by construction.
+        let keys_a: std::collections::BTreeSet<_> = a.set.keys().collect();
+        let keys_b: std::collections::BTreeSet<_> = b.set.keys().collect();
         assert_eq!(
-            a, b,
+            keys_a, keys_b,
             "oxttl and sophia disagree on canonical facts for trivial Turtle"
         );
     }

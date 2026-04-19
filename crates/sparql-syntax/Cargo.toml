@@ -1,0 +1,24 @@
+[package]
+name = "sparql-syntax"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Main SPARQL 1.1 Query + Update grammar parser for the zed-rdf workspace (ADR-0017 §4, ADR-0018 Phase C, ADR-0020 §1.4)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Frozen trait surface — the integration contract (ADR-0020 §1.4).
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+# Shared diagnostic-reporting infrastructure (ADR-0017 §4).
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+# RFC 3987 IRI validation at grammar boundaries (ADR-0017 Phase A).
+rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
+thiserror = { workspace = true }

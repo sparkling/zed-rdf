@@ -31,9 +31,11 @@ thiserror = { workspace = true }
 rdf-iri = { path = "../../rdf-iri", version = "0.0.0" }
 rdf-ntriples = { path = "../../rdf-ntriples", version = "0.0.0" }
 rdf-turtle = { path = "../../rdf-turtle", version = "0.0.0" }
+sparql-syntax = { path = "../../sparql-syntax", version = "0.0.0" }
 # Shadow parsers are loaded with their own `shadow` feature pre-enabled so the
 # adversary integration tests can compare main vs shadow behaviour on every
 # `cargo test -p rdf-diff` invocation (ADR-0019 §3, ADR-0020 §6.5).
 rdf-iri-shadow = { path = "../../syntax/rdf-iri-shadow", version = "0.0.0", features = ["shadow"] }
 rdf-ntriples-shadow = { path = "../../syntax/rdf-ntriples-shadow", version = "0.0.0", features = ["shadow"] }
 rdf-turtle-shadow = { path = "../../syntax/rdf-turtle-shadow", version = "0.0.0", features = ["shadow"] }
+sparql-syntax-shadow = { path = "../../syntax/sparql-syntax-shadow", version = "0.0.0", features = ["shadow"] }

@@ -562,6 +562,12 @@ fn canonicalise_term(term: &str) -> String {
             let normalised = bcp47_case_fold(tag);
             return format!("\"{lex}\"@{normalised}");
         }
+        // RDF 1.1 §3.3: plain literals have implicit datatype `xsd:string`.
+        // Strip an explicit `^^<xsd:string>` to match parsers that leave the
+        // datatype implicit (e.g. oxttl). See module-level docs.
+        if suffix == "^^<http://www.w3.org/2001/XMLSchema#string>" {
+            return format!("\"{lex}\"");
+        }
         return format!("\"{lex}\"{suffix}");
     }
     // Angle-bracketed IRIs and blank-node labels are already canonical.
