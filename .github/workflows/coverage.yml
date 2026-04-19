@@ -1,0 +1,138 @@
+# Per-crate coverage gate (ADR-0020 §1.2).
+#
+# Runs `cargo-llvm-cov` across the workspace on every PR and on a weekly
+# cron. Produces `lcov.info` (uploaded as an artefact on every run) plus
+# per-crate summaries for the Phase-A main parsers. The main parser set
+# (`rdf-iri`, `rdf-ntriples`, `rdf-turtle`, `rdf-diagnostics`) is hard-
+# gated at 70 % line coverage via `--fail-under-lines 70`; other members
+# run warn-only so the gate stays focused on the parsers Phase-A owns
+# end-to-end.
+#
+# No external upload: ADR-0020 has not authorised a Codecov token. When
+# that amendment lands a follow-up patch wires the upload action here.
+#
+# Claim (ADR-0020 §1.2 carry-over): `.github/workflows/coverage.yml`.
+# Coordinated with `cu-xtask-expand` — this workflow invokes
+# `cargo llvm-cov` directly; the xtask adds a local convenience wrapper
+# exposing the same thresholds (`xtask verify --coverage`).
+
+name: coverage
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly sweep — Monday 03:17 UTC (off-peak; avoids the top-of-hour
+    # GitHub-Actions stampede).
+    - cron: '17 3 * * 1'
+  # Manual trigger is useful when tuning thresholds; the job is cheap.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo-llvm-cov drops its working state here; mirrored in the
+  # runbook at docs/runbooks/coverage.md.
+  COVERAGE_OUTPUT_DIR: target/llvm-cov
+
+jobs:
+  coverage:
+    name: cargo-llvm-cov (workspace + per-crate gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      # Toolchain comes from rust-toolchain.toml (ADR-0001). `llvm-tools-
+      # preview` is required by cargo-llvm-cov to resolve the profdata
+      # merger binary.
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Separate cache key from the verification workflow — different
+          # RUSTFLAGS means cache blocks don't cross-pollinate.
+          shared-key: coverage
+          cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      # Workspace-wide run. Produces the lcov report consumed by the
+      # artefact-upload step below. `--workspace --all-features` mirrors
+      # the verification workflow so coverage reflects the tested
+      # surface. We let cargo-llvm-cov apply its own defaults for which
+      # targets to include — build-scripts, tests, and xtask are
+      # ignored by convention (see the `cargo-llvm-cov --help` section
+      # on excluded targets, and the runbook).
+      - name: cargo llvm-cov (workspace, lcov)
+        run: |
+          cargo llvm-cov \
+            --workspace \
+            --all-features \
+            --locked \
+            --lcov \
+            --output-path lcov.info
+
+      # Always upload the lcov report — successful or failed gate.
+      # Reviewers inspect the file locally (e.g. `genhtml`) to triage
+      # regressions. Retention kept tight because artefacts are large.
+      - name: Upload lcov.info artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-report
+          path: lcov.info
+          if-no-files-found: error
+          retention-days: 14
+
+      # Per-crate hard gates. Each invocation re-uses the workspace
+      # `target/llvm-cov-target` profdata cache that the first run
+      # populated, so incremental cost is low. `--fail-under-lines 70`
+      # exits non-zero when line coverage drops below 70 % for the
+      # named package.
+      - name: Gate rdf-iri at 70% line coverage
+        run: cargo llvm-cov report
+             --package rdf-iri
+             --fail-under-lines 70
+
+      - name: Gate rdf-ntriples at 70% line coverage
+        run: cargo llvm-cov report
+             --package rdf-ntriples
+             --fail-under-lines 70
+
+      - name: Gate rdf-turtle at 70% line coverage
+        run: cargo llvm-cov report
+             --package rdf-turtle
+             --fail-under-lines 70
+
+      - name: Gate rdf-diagnostics at 70% line coverage
+        run: cargo llvm-cov report
+             --package rdf-diagnostics
+             --fail-under-lines 70
+
+      # Warn-only summary for every other workspace member. We don't
+      # want a weak coverage number on a helper crate (e.g. the diff
+      # harness stubs) to block a Phase-A parser PR, but we still want
+      # the numbers printed in the log so reviewers see trends.
+      - name: Warn-only summary (all workspace members)
+        if: always()
+        run: cargo llvm-cov report --workspace

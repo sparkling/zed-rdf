@@ -22,11 +22,19 @@ Thumbs.db
 /lcov.info
 /.coverage/
 
-# Fuzzing
+# Fuzzing — root-level (legacy) and per-crate cargo-fuzz layouts.
+# Per-parser harnesses live at crates/*/fuzz/ (ADR-0018 §§3–4); the
+# corpus is **never** committed — the nightly workflow uploads it as an
+# artifact. See docs/runbooks/fuzzing.md.
 /fuzz/artifacts/
 /fuzz/corpus/
 /fuzz/coverage/
 /fuzz/target/
+crates/*/fuzz/target/
+crates/*/fuzz/corpus/
+crates/*/fuzz/artifacts/
+crates/*/fuzz/coverage/
+crates/*/fuzz/Cargo.lock
 
 # RuFlo / Claude-Flow runtime state
 /.claude-flow/

@@ -91,6 +91,13 @@ fn frame(source: &str, span: Span) -> Option<Frame<'_>> {
     if span.start > source.len() || span.end > source.len() || span.start > span.end {
         return None;
     }
+    // The source slices used below require char-boundary offsets. A
+    // caller feeding us a span landing mid-multibyte-char gets the
+    // "omit the caret frame" fallback promised in the doc comment,
+    // not a panic.
+    if !source.is_char_boundary(span.start) || !source.is_char_boundary(span.end) {
+        return None;
+    }
     let (line, column) = line_col(source, span.start)?;
     let line_start = nth_line_start(source, line)?;
     let line_end = source[line_start..]
@@ -114,6 +121,12 @@ fn frame(source: &str, span: Span) -> Option<Frame<'_>> {
 /// line.
 fn line_col(source: &str, offset: usize) -> Option<(usize, usize)> {
     if offset > source.len() {
+        return None;
+    }
+    // Same char-boundary invariant as `frame`: off-boundary offsets
+    // originate from a parser handed the wrong slice and must not
+    // panic the renderer.
+    if !source.is_char_boundary(offset) {
         return None;
     }
     let prefix = &source[..offset];

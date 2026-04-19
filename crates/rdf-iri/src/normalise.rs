@@ -5,12 +5,21 @@
 //! allows:
 //!
 //! - Scheme ASCII lowercase (RFC 3986 §6.2.2.1).
-//! - Host ASCII lowercase (RFC 3490 §4 step 2; full IDNA deferred).
+//! - Host ASCII lowercase (RFC 3490 §4 step 2). Already-ACE labels
+//!   (`xn--…`) are ASCII by construction, so lowercasing preserves
+//!   them verbatim — see
+//!   `docs/spec-readings/iri/idna-host-normalisation-pin.md`.
 //! - Path dot-segment removal (RFC 3986 §5.2.4, errata 4005) for
 //!   hierarchical IRIs only (i.e., when an authority or an absolute
 //!   path is present).
 //!
-//! [`to_uri`] implements RFC 3987 §3.1 with the same IDN carve-out.
+//! [`to_uri`] implements RFC 3987 §3.1 step 3 via the `idna` crate's
+//! `domain_to_ascii_strict` (RFC 3490 `ToASCII` — Punycode + UTS 46
+//! mapping). When `idna` rejects the input (empty host, disallowed
+//! code points, malformed `xn--` label), we fall back to the
+//! pre-patch path: ASCII-lowercase the host and percent-encode any
+//! remaining non-ASCII UTF-8 bytes. The fallback is documented in the
+//! spec-reading pin.
 
 use crate::{Diagnostic, DiagnosticCode, Iri, parse};
 
@@ -80,9 +89,7 @@ pub fn to_uri(iri: &Iri) -> Result<String, Diagnostic> {
                 // IP-literal: already ASCII, pass through verbatim.
                 out.push_str(host);
             } else {
-                // ireg-name → ASCII lowercase + pct-encode non-ASCII.
-                let lower = host.to_ascii_lowercase();
-                encode_non_ascii(&lower, &mut out, a)?;
+                encode_host(host, &mut out, a)?;
             }
         }
         if let Some((a, b)) = iri.parts.port {
@@ -103,6 +110,49 @@ pub fn to_uri(iri: &Iri) -> Result<String, Diagnostic> {
     }
 
     Ok(out)
+}
+
+/// RFC 3987 §3.1 step 3: map an `ireg-name` host to its ASCII form.
+///
+/// Strategy:
+///
+/// 1. If the host is pure ASCII, ASCII-lowercase it and emit. This
+///    covers already-ACE labels (`xn--…`) without re-running them
+///    through the `idna` decode/encode round trip.
+/// 2. Otherwise, run `idna::domain_to_ascii_strict` (RFC 3490 `ToASCII`
+///    with the UTS 46 strict profile). A successful result is emitted
+///    verbatim — it is already lowercase ASCII by construction.
+/// 3. If `idna` rejects the input (disallowed code points, malformed
+///    labels, empty string, bad existing `xn--` decode), fall back to
+///    the pre-patch path: ASCII-lowercase, then percent-encode any
+///    non-ASCII UTF-8 bytes. This keeps the function total so parsing
+///    never fails because of an IDNA-hostile host — the rejection is
+///    visible at the URI level as a `%`-heavy host rather than a
+///    structural error.
+///
+/// Trade-off documented in
+/// `docs/spec-readings/iri/idna-host-normalisation-pin.md`.
+fn encode_host(host: &str, out: &mut String, base_offset: usize) -> Result<(), Diagnostic> {
+    if host.is_ascii() {
+        // ASCII host: lowercase locally. Covers plain reg-names and
+        // already-ACE (`xn--…`) labels without a round-trip through
+        // `idna` — which in strict mode would reject underscores and
+        // other chars that our parser allows per RFC 3986 §3.2.2.
+        let lower = host.to_ascii_lowercase();
+        out.push_str(&lower);
+        return Ok(());
+    }
+    // Non-ASCII host: try full `ToASCII`.
+    if let Ok(ace) = idna::domain_to_ascii_strict(host) {
+        // `idna` returns lowercase ASCII on success; emit verbatim.
+        out.push_str(&ace);
+        Ok(())
+    } else {
+        // Fallback per the pin: lowercase ASCII bytes in the host,
+        // percent-encode the rest.
+        let lower = host.to_ascii_lowercase();
+        encode_non_ascii(&lower, out, base_offset)
+    }
 }
 
 fn encode_non_ascii(slice: &str, out: &mut String, base_offset: usize) -> Result<(), Diagnostic> {

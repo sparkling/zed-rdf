@@ -1,0 +1,38 @@
+# cargo-fuzz harness for the rdf-turtle parser (Turtle 1.1 + TriG).
+# ADR-0018 §§3–4. Out-of-workspace; see `rdf-iri/fuzz/Cargo.toml` for
+# the rationale.
+
+[package]
+name = "rdf-turtle-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+autobins = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rdf-turtle = { path = ".." }
+rdf-diff = { path = "../../testing/rdf-diff" }
+
+[[bin]]
+name = "parse_turtle"
+path = "fuzz_targets/parse_turtle.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_trig"
+path = "fuzz_targets/parse_trig.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "bnode_scope_invariants"
+path = "fuzz_targets/bnode_scope_invariants.rs"
+test = false
+doc = false
+
+[workspace]

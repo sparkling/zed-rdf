@@ -1,0 +1,50 @@
+# cargo-fuzz harness for the rdf-iri parser. ADR-0018 §§3–4: per-parser
+# coverage-guided fuzzing, 60-second smoke per target in CI (see
+# `.github/workflows/fuzz-smoke.yml`). Deliberately **not** a workspace
+# member — cargo-fuzz expects its own crate with a `build-std`-friendly
+# layout, and we don't want the nightly-only harness to leak into
+# `cargo build --workspace` on stable.
+
+[package]
+name = "rdf-iri-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+# cargo-fuzz requires this marker so it does not treat the harness itself
+# as a fuzzable target.
+autobins = false
+
+[package.metadata]
+# cargo-fuzz reads this to skip publishing / scraping metadata.
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rdf-iri = { path = ".." }
+
+# Each target is a standalone binary crate; libfuzzer-sys provides `main`.
+# The `test = false` + `doc = false` flags are cargo-fuzz conventions that
+# stop `cargo test`/`cargo doc` from pulling the fuzz harness in.
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "resolve"
+path = "fuzz_targets/resolve.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "normalise_idempotence"
+path = "fuzz_targets/normalise_idempotence.rs"
+test = false
+doc = false
+
+# Keep the fuzz crate out of the parent workspace so `cargo build` on
+# stable never tries to compile it (libfuzzer-sys needs nightly + the
+# sanitizer runtime). See docs/runbooks/fuzzing.md.
+[workspace]

@@ -4,10 +4,16 @@
 - **Date:** 2026-04-18
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
-- **Amended-by:** ADR-0019 §1 (`[dev-dependencies]` carve-out for
-  reference oracles — `oxttl`, `oxrdfxml`, `oxjsonld`, `oxsparql-syntax`
-  /`spargebra`, `sophia_*`). Mechanical enforcement via `deny.toml` +
-  `crates/testing/deny-regression/`.
+- **Amended-by:**
+  - ADR-0019 §1 (`[dev-dependencies]` carve-out for reference oracles
+    — `oxttl`, `oxrdfxml`, `oxjsonld`, `oxsparql-syntax`/`spargebra`,
+    `sophia_*`). Mechanical enforcement via `deny.toml` +
+    `crates/testing/deny-regression/`.
+  - Patch 2026-04-19 (this file, §"Runtime IETF-RFC carve-out"):
+    widens the runtime allow-list to permit curated, pure
+    IETF/Unicode-standard-implementing crates on a per-ADR basis.
+    First admitted member: `idna` (RFC 3490 / UTS 46) for
+    `rdf-iri`'s `ToASCII`. No RDF/SPARQL semantics; leaf dep only.
 - **Tags:** `policy`, `dependencies`, `supply-chain`
 
 ## Context and Problem Statement
@@ -77,6 +83,38 @@ role.**
 | `criterion`                     | Benchmarks (dev)                                  | Perf gate                       | Custom harness                    |
 | `cargo-fuzz` + `libfuzzer-sys`  | Fuzzing (dev)                                     | Parser hardening                | Hand-written brute-force          |
 | `zed_extension_api`             | Zed extension runtime                             | Required by Zed                 | n/a                               |
+
+### Runtime IETF-RFC carve-out (patch 2026-04-19)
+
+The allow-list above already enumerates infrastructure crates by role.
+This patch adds a narrower, per-ADR admission path for crates whose
+sole purpose is to implement an IETF RFC or Unicode Technical Standard
+that our own parsers are legally obliged to follow but for which a
+hand-rolled implementation is out of scope for v1. Admissions require
+a row here plus a `deny.toml` / `[workspace.dependencies]` edit.
+
+| Crate  | Standard                               | Why we don't reimplement                                                                                                          | Fallback                                                   |
+|--------|----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
+| `idna` | RFC 3490 (IDNA 2003), UTS 46 (IDNA 2008 mapping), RFC 3492 (Punycode) | Punycode + nameprep + UTS 46 mapping tables are a self-contained Unicode algorithm; reimplementing by hand is weeks of work with a large precomputed table (≈4000 lines). The `servo/rust-url` `idna` crate is pure-leaf (`idna_adapter` is its only dep), widely audited, MIT/Apache-2.0 licensed, and has zero RDF/SPARQL semantics — it just encodes domain labels. Consumed by `rdf-iri` for RFC 3987 §3.1 `ToASCII` host mapping. | ASCII-lowercase host folding only; non-ASCII hosts surface as pct-encoded UTF-8 (what the pre-patch pin did). |
+
+Admission criteria (must all hold):
+
+1. The crate implements a single published IETF/Unicode/W3C standard.
+   Not a general-purpose utility that happens to include the standard.
+2. No RDF, SPARQL, SHACL, OWL, or ShEx semantics. Domain-name handling
+   and character-set tables are fine; parsing triples is not.
+3. Leaf dependency (or nearly — `idna_adapter` is the only transitive
+   for `idna`). Each transitive must be re-inspected on version bump.
+4. Licence compatible with Apache-2.0 OR MIT.
+5. Actively maintained by a recognisable upstream (servo, unicode-org,
+   rust-lang, etc.).
+
+Mechanical enforcement: the crate is added to
+`[workspace.dependencies]`, referenced from the consuming crate's
+`[dependencies]` as `workspace = true`, and does **not** appear in
+`deny.toml`'s `deny` list — there is no equivalent of the banned-RDF
+list for RFC-implementation crates, because admitting them is an
+ADR-level decision that already implies licence + supply-chain review.
 
 ### Explicitly forbidden
 

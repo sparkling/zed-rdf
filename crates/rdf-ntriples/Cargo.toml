@@ -16,3 +16,8 @@ workspace = true
 
 [dependencies]
 rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+
+# Property tests (ADR-0004 / ADR-0006 §Layers-2). Kept dev-only: the main
+# parser carries no runtime edge to `proptest`.
+[dev-dependencies]
+proptest = "1"

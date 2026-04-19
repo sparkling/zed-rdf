@@ -27,3 +27,8 @@ workspace = true
 [dependencies]
 # Optional — only compiled when the `lsp` feature is enabled.
 lsp-types = { version = "0.97", optional = true }
+
+# Property tests (ADR-0004 / ADR-0006 §Layers-2). Kept dev-only: the
+# diagnostics crate has no runtime edge to `proptest`.
+[dev-dependencies]
+proptest = "1"

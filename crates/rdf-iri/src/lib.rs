@@ -13,8 +13,10 @@
 //!   percent-encoded octets, decode unreserved percent-encodings, fold
 //!   host case, or apply Unicode NFC/NFD at parse time.
 //! - `docs/spec-readings/iri/idna-host-normalisation-pin.md`: `ToASCII`
-//!   is limited to ASCII lowercasing; full IDNA (nameprep + Punycode)
-//!   is deferred to a future patch.
+//!   (RFC 3490 Punycode + UTS 46 mapping) is applied by [`Iri::to_uri`]
+//!   via the `idna` crate. Inputs `idna` rejects (disallowed code
+//!   points, malformed `xn--` labels, empty host) fall through to
+//!   ASCII-lowercase + percent-encode UTF-8 bytes.
 //! - RFC 3986 §5.2.2 (merge) + §5.2.4 (`remove_dot_segments`, with
 //!   errata 4005): applied during [`Iri::resolve`].
 //! - RFC 3987 §3.1 (Converting IRIs to URIs): applied during the
@@ -165,9 +167,13 @@ impl Iri {
     /// Apply the narrow normalisations permitted by `IRI-PCT-001`:
     ///
     /// - **Scheme case.** ASCII-lowercased (RFC 3986 §6.2.2.1).
-    /// - **Host case.** ASCII-lowercased (pin: step-2 of RFC 3490 §4
-    ///   only; full IDNA/Punycode is deferred — see
-    ///   `docs/spec-readings/iri/idna-host-normalisation-pin.md`).
+    /// - **Host case.** ASCII-lowercased (RFC 3490 §4 step 2).
+    ///   Already-ACE labels (`xn--…`) are ASCII by construction, so
+    ///   lowercasing preserves them verbatim. Non-ASCII hosts are
+    ///   **not** mutated here — `ToASCII` runs during
+    ///   [`Iri::to_uri`], not during [`Iri::normalise`], because it
+    ///   changes the host byte sequence and would break the pin's
+    ///   "no silent normalisation" guarantee for equality callers.
     /// - **Path dot-segment removal** for absolute IRIs (RFC 3986
     ///   §5.2.4, errata 4005).
     ///
@@ -200,10 +206,16 @@ impl Iri {
 
     /// Convert this IRI to an RFC 3986 URI per RFC 3987 §3.1.
     ///
-    /// Non-ASCII characters in `iunreserved` positions are UTF-8
-    /// encoded and percent-escaped. Host `ireg-name` labels are passed
-    /// through ASCII-lowercased (step-2 of RFC 3490 §4); full IDNA
-    /// (Punycode + nameprep) is **not** applied — see the IDNA pin.
+    /// Non-ASCII characters in `iunreserved` positions (path, query,
+    /// fragment, userinfo) are UTF-8 encoded and percent-escaped. Host
+    /// `ireg-name` labels are passed through RFC 3490 `ToASCII` (UTS
+    /// 46 strict profile) via the `idna` crate: pure-ASCII labels are
+    /// lowercased locally, Unicode labels are Punycode-encoded
+    /// (`xn--…`). When `idna` rejects the input (disallowed code
+    /// points, empty host, malformed existing `xn--` label), we fall
+    /// back to ASCII-lowercasing + percent-encoding the host's
+    /// non-ASCII UTF-8 bytes — see
+    /// `docs/spec-readings/iri/idna-host-normalisation-pin.md`.
     ///
     /// # Errors
     ///

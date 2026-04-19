@@ -60,7 +60,7 @@ use std::fs;
 use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 
 // NB: during the v1 bootstrap the xtask does **not** take a path
 // dependency on `rdf-diff` — see this crate's Cargo.toml for the
@@ -141,15 +141,26 @@ fn main() -> ExitCode {
 /// Parse flags and dispatch. Returns the process exit code.
 fn run_verify(args: &[String]) -> Result<ExitCode, String> {
     let mut smoke = false;
+    let mut coverage = false;
     for a in args {
         match a.as_str() {
             "--smoke" => smoke = true,
+            "--coverage" => coverage = true,
             "--help" | "-h" => {
                 print_help();
                 return Ok(ExitCode::SUCCESS);
             }
             other => return Err(format!("unknown flag `{other}`")),
         }
+    }
+
+    // Coverage is a pure convenience wrapper around `cargo llvm-cov`
+    // (ADR-0020 §1.2). Runs independently of the diff harness so a
+    // local developer can request it without having to stand up the
+    // fact-oracle JSONs first. Mirrors the CI gate semantics in
+    // `.github/workflows/coverage.yml`.
+    if coverage {
+        return run_coverage();
     }
 
     let repo_root = repo_root()?;
@@ -183,26 +194,164 @@ fn run_verify(args: &[String]) -> Result<ExitCode, String> {
     );
 
     if summary.had_unacceptable_failure {
-        Ok(ExitCode::from(1))
-    } else {
-        Ok(ExitCode::SUCCESS)
+        return Ok(ExitCode::from(1));
     }
+
+    // ADR-0019 §Validation fail-closed: zero divergences on a real
+    // (non-smoke) run is *suspicious*, not success. Zero happens when
+    // either (a) the main parsers + shadows + oracles are not all
+    // wired, or (b) the fixture corpus is empty. Either way, declaring
+    // green would let a broken harness claim the green flag. In smoke
+    // mode zero is fine because the infrastructure is deliberately
+    // stubbed.
+    if !summary.smoke && summary.total_divergences == 0 {
+        eprintln!(
+            "xtask verify: ERROR — zero divergences on a non-smoke run; \
+             per ADR-0019 §Validation this is suspicious, not success. \
+             Check that main parsers + shadows + oracles are wired and \
+             the fixture corpus is non-empty."
+        );
+        return Ok(ExitCode::from(1));
+    }
+
+    Ok(ExitCode::SUCCESS)
 }
 
 fn print_help() {
     println!(
         "xtask verify — verification-v1 PR-gate runner\n\
          \n\
-         USAGE:\n    cargo run -p xtask -- verify [--smoke]\n\
+         USAGE:\n    cargo run -p xtask -- verify [--smoke] [--coverage]\n\
          \n\
          FLAGS:\n\
-         \x20   --smoke   Use external/fact-oracles/fixtures/smoke/ when the\n\
-         \x20             vendored W3C suite is absent. Auto-enabled on a\n\
-         \x20             fresh checkout (no external/tests/ tree).\n\
+         \x20   --smoke      Use external/fact-oracles/fixtures/smoke/ when the\n\
+         \x20                vendored W3C suite is absent. Auto-enabled on a\n\
+         \x20                fresh checkout (no external/tests/ tree).\n\
+         \x20   --coverage   Shell out to `cargo llvm-cov` to produce an\n\
+         \x20                `lcov.info` and per-crate line-coverage\n\
+         \x20                summaries. Mirrors the CI gate in\n\
+         \x20                .github/workflows/coverage.yml. Requires the\n\
+         \x20                `cargo-llvm-cov` binary to be installed.\n\
          \x20   -h, --help\n\
          \n\
-         Outputs are written to `target/verification-reports/`."
+         Outputs are written to `target/verification-reports/` (diff\n\
+         harness) and `lcov.info` / `target/llvm-cov` (coverage)."
     );
+}
+
+/// Package names whose coverage is hard-gated at 70 % line coverage.
+/// Kept in lockstep with `.github/workflows/coverage.yml`.
+const COVERAGE_HARD_GATED_PACKAGES: &[&str] = &[
+    "rdf-iri",
+    "rdf-ntriples",
+    "rdf-turtle",
+    "rdf-diagnostics",
+];
+
+/// Hard-gate threshold, percent. Single source of truth for both the
+/// workflow and the xtask wrapper.
+const COVERAGE_FAIL_UNDER_LINES: u8 = 70;
+
+/// Run `cargo llvm-cov` locally — the `xtask verify --coverage`
+/// convenience path. We intentionally shell out rather than try to drive
+/// cargo-llvm-cov as a library: the binary is the contract, it prints
+/// per-crate summaries to stdout, and the exit status is load-bearing.
+///
+/// On a fresh checkout where `cargo-llvm-cov` is not installed, we exit
+/// with a clear install hint (ADR-0020 §1.2 acceptance).
+fn run_coverage() -> Result<ExitCode, String> {
+    if !cargo_llvm_cov_installed() {
+        eprintln!(
+            "xtask verify --coverage: `cargo-llvm-cov` is not installed.\n\
+             \n\
+             Install it with one of:\n\
+             \x20   cargo install cargo-llvm-cov --locked\n\
+             \x20   # or, in CI: use `taiki-e/install-action@v2` with `tool: cargo-llvm-cov`\n\
+             \n\
+             You also need the `llvm-tools-preview` rustup component:\n\
+             \x20   rustup component add llvm-tools-preview\n\
+             \n\
+             See docs/runbooks/coverage.md for the full setup."
+        );
+        return Ok(ExitCode::from(1));
+    }
+
+    // 1. Workspace-wide lcov report. `--locked` keeps the result
+    //    reproducible on a clean clone. We do not pass `--no-clean` so
+    //    stale profdata from prior runs cannot leak in.
+    eprintln!("xtask verify --coverage: running cargo llvm-cov --workspace ...");
+    let status = Command::new("cargo")
+        .args([
+            "llvm-cov",
+            "--workspace",
+            "--all-features",
+            "--locked",
+            "--lcov",
+            "--output-path",
+            "lcov.info",
+        ])
+        .status()
+        .map_err(|e| format!("failed to spawn `cargo llvm-cov`: {e}"))?;
+    if !status.success() {
+        eprintln!("xtask verify --coverage: `cargo llvm-cov` exited {status}");
+        return Ok(ExitCode::from(1));
+    }
+
+    // 2. Per-crate hard gates. A failure of any one gate fails the
+    //    whole wrapper — we keep going across the rest so the developer
+    //    sees every failing crate in a single run rather than one at a
+    //    time. Matches the CI workflow's step-by-step `cargo llvm-cov
+    //    report --package ... --fail-under-lines 70` sequence.
+    let mut any_gate_failed = false;
+    for pkg in COVERAGE_HARD_GATED_PACKAGES {
+        eprintln!(
+            "xtask verify --coverage: gate {pkg} at {COVERAGE_FAIL_UNDER_LINES}% line coverage"
+        );
+        let status = Command::new("cargo")
+            .args([
+                "llvm-cov",
+                "report",
+                "--package",
+                pkg,
+                "--fail-under-lines",
+                &COVERAGE_FAIL_UNDER_LINES.to_string(),
+            ])
+            .status()
+            .map_err(|e| format!("failed to spawn `cargo llvm-cov report`: {e}"))?;
+        if !status.success() {
+            eprintln!(
+                "xtask verify --coverage: {pkg} below {COVERAGE_FAIL_UNDER_LINES}% line coverage"
+            );
+            any_gate_failed = true;
+        }
+    }
+
+    // 3. Warn-only workspace summary. Informational — never fails.
+    eprintln!("xtask verify --coverage: workspace summary (warn-only)");
+    let _ = Command::new("cargo")
+        .args(["llvm-cov", "report", "--workspace"])
+        .status();
+
+    if any_gate_failed {
+        Ok(ExitCode::from(1))
+    } else {
+        eprintln!("xtask verify --coverage: OK — lcov.info written");
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+/// Probe for `cargo-llvm-cov` by asking cargo to list its subcommand
+/// help. We avoid `which`/env-PATH searches because cargo resolves the
+/// binary via its own plugin lookup (looks for `cargo-llvm-cov` on
+/// PATH). A `cargo llvm-cov --version` that exits non-zero means the
+/// plugin is missing.
+fn cargo_llvm_cov_installed() -> bool {
+    Command::new("cargo")
+        .args(["llvm-cov", "--version"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 /// The subset of the environment a single `verify` invocation needs.

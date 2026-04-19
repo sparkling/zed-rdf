@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7cf04f7f3a046106dd92661c9f4db07904ecec4f7e9678c70834584a9f551f77 # shrinks to diag = Diagnostic { severity: Error, code: "X-0001", message: "", span: Span { start: 0, end: 0 }, hint: None, related: [Related { span: Span { start: 82, end: 82 }, message: "" }] }, source = "ࠀࠀ00A ¡A𐀀A\u{b}0a𐀀¡  \u{b}𐀀 ¡ \0𐀀¡\u{b}\n\u{feff}'🕴:$5\u{87389}\u{b}\u{70431}\u{f760b}%㼑\u{6}¶\r\u{71904})\"\\\u{a283d}&'ΰ/{�"

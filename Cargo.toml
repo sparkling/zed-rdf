@@ -90,3 +90,9 @@ cargo = { level = "warn", priority = -1 }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# ADR-0004 runtime IETF-RFC carve-out (patch 2026-04-19): RFC 3490 /
+# UTS 46 domain-name ToASCII (Punycode + nameprep). Consumed by
+# `rdf-iri` for RFC 3987 §3.1 host mapping. `default-features` are kept
+# on so the precomputed Unicode tables ship with the crate — otherwise
+# we'd need to vendor them ourselves, defeating the carve-out.
+idna = "1"

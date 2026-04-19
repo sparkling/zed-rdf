@@ -1,0 +1,7 @@
+# cargo-fuzz artefacts — never committed. Corpus minimisation is handled
+# by the nightly workflow and uploaded as an artifact; the canonical
+# corpus lives in CI storage, not in-tree.
+target/
+corpus/
+artifacts/
+coverage/

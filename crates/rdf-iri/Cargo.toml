@@ -17,3 +17,13 @@ workspace = true
 [dependencies]
 rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
 thiserror = { workspace = true }
+# RFC 3490 / UTS 46 `ToASCII` for RFC 3987 §3.1 host mapping. Admitted
+# to the runtime allow-list by ADR-0004's runtime IETF-RFC carve-out
+# (patch 2026-04-19). See `docs/spec-readings/iri/
+# idna-host-normalisation-pin.md` for the fallback behaviour.
+idna = { workspace = true }
+
+# Property tests (ADR-0004 / ADR-0006 §Layers-2). Kept dev-only: the main
+# parser carries no runtime edge to `proptest`.
+[dev-dependencies]
+proptest = "1"

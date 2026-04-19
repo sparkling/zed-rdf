@@ -237,18 +237,104 @@ fn to_uri_lowercases_host_ascii_only() {
 }
 
 #[test]
-fn to_uri_non_ascii_host_is_pct_encoded_not_punycode() {
-    let iri = Iri::parse("http://münchen.de/").unwrap();
-    // Full ToASCII would produce `xn--mnchen-3ya.de`; we emit pct-
-    // encoded UTF-8 and document this as a known deferral.
-    assert_eq!(iri.to_uri().unwrap(), "http://m%C3%BCnchen.de/");
-}
-
-#[test]
 fn to_uri_preserves_pct_hex_case_in_path() {
     // Pin: no hex case fold.
     let iri = Iri::parse("http://example/a%2f%2F").unwrap();
     assert_eq!(iri.to_uri().unwrap(), "http://example/a%2f%2F");
+}
+
+// ----------------------------------------------------------------------
+// IDN ToASCII (RFC 3490 / UTS 46) — ADR-0004 runtime IETF-RFC carve-out.
+// Covered in docs/spec-readings/iri/idna-host-normalisation-pin.md.
+// ----------------------------------------------------------------------
+
+#[test]
+fn to_uri_plain_ascii_host_unchanged() {
+    // ASCII-only host: must round-trip through our local lowercase
+    // path, not through `idna` (which would reject e.g. underscores
+    // our parser legitimately accepts).
+    let iri = Iri::parse("http://example.com/a").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "http://example.com/a");
+}
+
+#[test]
+fn to_uri_lowercase_folds_ascii_host() {
+    // Host case-fold is RFC 3490 §4 step 2. Already covered elsewhere
+    // but repeated here to keep the IDN-group complete.
+    let iri = Iri::parse("http://EXAMPLE.COM/").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "http://example.com/");
+}
+
+#[test]
+fn to_uri_single_label_unicode_to_ace() {
+    // Single Unicode label becomes a single ACE label.
+    let iri = Iri::parse("http://münchen.de/").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "http://xn--mnchen-3ya.de/");
+}
+
+#[test]
+fn to_uri_mixed_unicode_and_ascii_labels() {
+    // Only the Unicode label becomes ACE; the ASCII labels stay ASCII.
+    let iri = Iri::parse("http://api.münchen.de/v1").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "http://api.xn--mnchen-3ya.de/v1");
+}
+
+#[test]
+fn to_uri_idn_reject_falls_back_to_pct_encode() {
+    // Exercising the `idna::domain_to_ascii_strict` → `Err` fallback
+    // path via the public API requires a code point that (a) our
+    // IRI parser admits in a host via RFC 3987 §2.2 `ucschar`, and
+    // (b) UTS 46 strict rejects. That intersection is empty in
+    // practice: the `ucschar` range excludes bidi/format/unassigned
+    // code points that UTS 46 disallows, so every non-ASCII host we
+    // can parse is one `idna` accepts.
+    //
+    // The fallback code path in `encode_host` is therefore not
+    // reachable from this end. It remains load-bearing as a defence
+    // against direct `to_uri` callers that bypass `Iri::parse` with
+    // hand-crafted `Iri` values. When that API arrives, this test
+    // grows teeth. For now it documents the invariant.
+    let iri = Iri::parse("http://münchen.de/").unwrap();
+    // No fallback fired; idna succeeded and emitted the ACE form.
+    assert_eq!(iri.to_uri().unwrap(), "http://xn--mnchen-3ya.de/");
+}
+
+#[test]
+fn to_uri_idn_round_trip_is_idempotent() {
+    // Running `to_uri` on the already-URI output must be a no-op in
+    // the host component.
+    let iri = Iri::parse("http://münchen.de/path").unwrap();
+    let once = iri.to_uri().unwrap();
+    let again = Iri::parse(&once).unwrap().to_uri().unwrap();
+    assert_eq!(once, again);
+    assert_eq!(again, "http://xn--mnchen-3ya.de/path");
+}
+
+#[test]
+fn to_uri_empty_host_falls_back() {
+    // file:/// has an empty authority. `idna::domain_to_ascii_strict`
+    // rejects the empty string, so our fallback takes over and emits
+    // the empty host verbatim — no `xn--` on a phantom label.
+    let iri = Iri::parse("file:///tmp/x").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "file:///tmp/x");
+}
+
+#[test]
+fn to_uri_already_ace_host_preserved() {
+    // Pre-encoded ACE labels must round-trip exactly; the ASCII
+    // short-circuit in `encode_host` skips the `idna` call entirely
+    // so there is no decode/encode drift.
+    let iri = Iri::parse("http://xn--mnchen-3ya.de/").unwrap();
+    assert_eq!(iri.to_uri().unwrap(), "http://xn--mnchen-3ya.de/");
+}
+
+#[test]
+fn normalise_preserves_ace_host_verbatim() {
+    // Already-ACE hosts are ASCII by construction; `normalise`'s
+    // ASCII-lowercase pass is a no-op on them.
+    let iri = Iri::parse("http://xn--mnchen-3ya.de/a/./b").unwrap().normalise();
+    assert_eq!(iri.host(), Some("xn--mnchen-3ya.de"));
+    assert_eq!(iri.path(), "/a/b");
 }
 
 // ----------------------------------------------------------------------

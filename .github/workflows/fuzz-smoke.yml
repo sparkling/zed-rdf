@@ -1,0 +1,123 @@
+# 60-second cargo-fuzz smoke per parser target (ADR-0018 §§3–4).
+#
+# Runs on every PR touching a parser crate and on the nightly cron.
+# The goal is a *cheap* find-me-panics gate — not saturation. Longer
+# runs (30-minute per target, with corpus minimisation) live in the
+# sibling `fuzz-nightly.yml` workflow.
+#
+# Matrix key: (crate, target). Each cell runs `cargo fuzz run <target>`
+# with `-max_total_time=60`. On crash, libFuzzer writes a
+# `crash-<hash>` file under `fuzz/artifacts/<target>/`; we upload the
+# whole artefacts directory and fail the job.
+#
+# No corpus is seeded or persisted here — smoke is a "cold fuzz" gate.
+# The nightly workflow handles corpus minimisation.
+#
+# Claim (ADR-0018 §4): `.github/workflows/fuzz-smoke.yml`.
+
+name: fuzz-smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/rdf-iri/**"
+      - "crates/rdf-ntriples/**"
+      - "crates/rdf-turtle/**"
+      - "crates/testing/rdf-diff/**"
+      - ".github/workflows/fuzz-smoke.yml"
+  schedule:
+    # Nightly 03:23 UTC. Odd minute dodges the top-of-hour thundering
+    # herd; the smoke gate is short enough that the exact slot is
+    # not load-bearing.
+    - cron: "23 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo-fuzz requires a nightly toolchain for the `-Z build-std`
+  # sanitizer plumbing. Pin a recent nightly so the CI cache stays
+  # warm between runs; bumping this is a routine PR.
+  FUZZ_TOOLCHAIN: nightly-2026-03-01
+
+jobs:
+  smoke:
+    name: fuzz 60s (${{ matrix.crate }} / ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: rdf-iri
+            target: parse
+          - crate: rdf-iri
+            target: resolve
+          - crate: rdf-iri
+            target: normalise_idempotence
+          - crate: rdf-ntriples
+            target: parse_ntriples
+          - crate: rdf-ntriples
+            target: parse_nquads
+          - crate: rdf-turtle
+            target: parse_turtle
+          - crate: rdf-turtle
+            target: parse_trig
+          - crate: rdf-turtle
+            target: bnode_scope_invariants
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install nightly Rust toolchain (cargo-fuzz requirement)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.FUZZ_TOOLCHAIN }}
+          components: rust-src
+
+      - name: Cache cargo registry + fuzz build
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Partition the cache per (crate, target) so a crash in one
+          # target doesn't poison the artefact layout for another.
+          shared-key: fuzz-smoke-${{ matrix.crate }}
+          workspaces: crates/${{ matrix.crate }}/fuzz
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-fuzz
+        run: cargo +${{ env.FUZZ_TOOLCHAIN }} install cargo-fuzz --locked
+
+      - name: Fuzz smoke (60 seconds)
+        working-directory: crates/${{ matrix.crate }}/fuzz
+        # -max_total_time bounds the run; -runs=0 would mean "just
+        # exit"; -detect_leaks=0 avoids LeakSanitizer noise for the
+        # small, short-lived allocations our parsers make.
+        run: |
+          cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz run ${{ matrix.target }} \
+            -- \
+            -max_total_time=60 \
+            -detect_leaks=0
+
+      - name: Upload crash artefacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          # Name keys on (crate, target) so concurrent matrix legs do
+          # not overwrite each other. Retention is short — crashes
+          # that matter are triaged into the nightly corpus.
+          name: fuzz-smoke-crash-${{ matrix.crate }}-${{ matrix.target }}
+          path: |
+            crates/${{ matrix.crate }}/fuzz/artifacts/${{ matrix.target }}/**
+            crates/${{ matrix.crate }}/fuzz/fuzz/artifacts/${{ matrix.target }}/**
+          if-no-files-found: ignore
+          retention-days: 14

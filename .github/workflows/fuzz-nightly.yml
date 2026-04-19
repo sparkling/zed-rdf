@@ -1,0 +1,137 @@
+# 30-minute cargo-fuzz run per parser target with corpus minimisation
+# (ADR-0018 §§3–4, nightly tier).
+#
+# Complements the PR-side `fuzz-smoke.yml` — same matrix, longer run,
+# plus a corpus-minimisation step that uploads the minimised corpus
+# as an artifact. The corpus itself is **never** committed; it lives
+# in CI storage because committing binary corpora to-git would
+# thrash line-noise on every run. See `docs/runbooks/fuzzing.md` for
+# the "seed a corpus locally" flow.
+#
+# release-cadence:
+#   Nightly at 04:47 UTC. If any target crashes on two consecutive
+#   nightlies, the `cu-fuzz-triage` on-call escalates this workflow
+#   to a 2-hour weekly soak — edit `FUZZ_MAX_SECONDS` below and the
+#   cron to `0 5 * * 0`. The escalation is manual-on-signal rather
+#   than always-on so CI minutes stay bounded until an issue bites.
+#
+# Claim (ADR-0018 §4): `.github/workflows/fuzz-nightly.yml`.
+
+name: fuzz-nightly
+
+on:
+  schedule:
+    # 04:47 UTC. Runs after the fuzz-smoke 03:23 cron so a regression
+    # that broke smoke surfaces before we spend 30 minutes × N targets
+    # chasing the same signal.
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+    inputs:
+      max_seconds:
+        description: "Per-target libFuzzer -max_total_time (seconds)."
+        type: string
+        default: "1800"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialise nightly runs on `main` — starting a second before the
+  # first finished would double-spend CI minutes and tangle the
+  # uploaded corpus artefacts.
+  group: fuzz-nightly
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  FUZZ_TOOLCHAIN: nightly-2026-03-01
+  # 30 minutes per target in steady state. Workflow_dispatch can
+  # override, and the release-cadence note above covers escalation.
+  FUZZ_MAX_SECONDS: ${{ github.event.inputs.max_seconds || '1800' }}
+
+jobs:
+  nightly:
+    name: fuzz 30min (${{ matrix.crate }} / ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    # 30 min fuzz + cache + minimisation overhead. Leave headroom.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: rdf-iri
+            target: parse
+          - crate: rdf-iri
+            target: resolve
+          - crate: rdf-iri
+            target: normalise_idempotence
+          - crate: rdf-ntriples
+            target: parse_ntriples
+          - crate: rdf-ntriples
+            target: parse_nquads
+          - crate: rdf-turtle
+            target: parse_turtle
+          - crate: rdf-turtle
+            target: parse_trig
+          - crate: rdf-turtle
+            target: bnode_scope_invariants
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install nightly Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.FUZZ_TOOLCHAIN }}
+          components: rust-src
+
+      - name: Cache cargo registry + fuzz build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fuzz-nightly-${{ matrix.crate }}
+          workspaces: crates/${{ matrix.crate }}/fuzz
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-fuzz
+        run: cargo +${{ env.FUZZ_TOOLCHAIN }} install cargo-fuzz --locked
+
+      - name: Fuzz run (soak)
+        working-directory: crates/${{ matrix.crate }}/fuzz
+        run: |
+          cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz run ${{ matrix.target }} \
+            -- \
+            -max_total_time=${{ env.FUZZ_MAX_SECONDS }} \
+            -detect_leaks=0
+
+      - name: Minimise corpus
+        # Only runs when fuzz didn't already fail; a crashing target's
+        # corpus is uploaded as-is below, minimisation is pointless.
+        if: success()
+        working-directory: crates/${{ matrix.crate }}/fuzz
+        run: |
+          cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz cmin ${{ matrix.target }} || \
+            echo "::warning::cmin produced no reduction (empty corpus?)"
+
+      - name: Upload minimised corpus (on success)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-corpus-${{ matrix.crate }}-${{ matrix.target }}
+          path: crates/${{ matrix.crate }}/fuzz/corpus/${{ matrix.target }}/**
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload crash artefacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-crash-${{ matrix.crate }}-${{ matrix.target }}
+          path: |
+            crates/${{ matrix.crate }}/fuzz/artifacts/${{ matrix.target }}/**
+            crates/${{ matrix.crate }}/fuzz/fuzz/artifacts/${{ matrix.target }}/**
+          if-no-files-found: ignore
+          retention-days: 30
