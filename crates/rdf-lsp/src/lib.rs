@@ -8,6 +8,9 @@
 
 pub mod dispatch;
 pub mod features;
+pub mod semantic_tokens;
+pub mod incremental;
+pub mod rename;
 
 /// RDF/SPARQL/`ShEx`/Datalog language variants supported by the LSP server.
 ///

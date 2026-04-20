@@ -14,16 +14,18 @@ use std::collections::HashMap;
 
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::{
-    CompletionOptions, CompletionResponse, Diagnostic, DiagnosticSeverity,
-    DocumentSymbolResponse, GotoDefinitionResponse, HoverProviderCapability, OneOf, Position,
-    PublishDiagnosticsParams, Range, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    CodeActionProviderCapability, CompletionOptions, CompletionResponse, Diagnostic,
+    DiagnosticSeverity, DocumentSymbolResponse, GotoDefinitionResponse, HoverProviderCapability,
+    OneOf, Position, PublishDiagnosticsParams, Range, RenameOptions, SemanticTokensFullOptions,
+    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     notification::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
         PublishDiagnostics,
     },
     request::{
-        Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest, Request as _,
+        CodeActionRequest, Completion, DocumentSymbolRequest, Formatting, GotoDefinition,
+        HoverRequest, Rename, Request as _, SemanticTokensFullRequest,
     },
 };
 
@@ -93,6 +95,19 @@ fn server_capabilities() -> ServerCapabilities {
         definition_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Right(RenameOptions {
+            prepare_provider: Some(false),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
+        code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+                legend: crate::semantic_tokens::legend(),
+                range: Some(false),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+            },
+        )),
         ..Default::default()
     }
 }
@@ -186,6 +201,9 @@ fn dispatch_request(connection: &Connection, req: Request, state: &ServerState) 
         GotoDefinition::METHOD => handle_goto_definition_request(connection, req, state),
         DocumentSymbolRequest::METHOD => handle_document_symbol_request(connection, req, state),
         Formatting::METHOD => handle_formatting_request(connection, req, state),
+        SemanticTokensFullRequest::METHOD => handle_semantic_tokens_request(connection, req, state),
+        Rename::METHOD => handle_rename_request(connection, req, state),
+        CodeActionRequest::METHOD => handle_code_action_request(connection, req, state),
         _ => send_error(connection, req.id, ErrorCode::MethodNotFound, "method not implemented"),
     }
 }
@@ -303,6 +321,58 @@ fn handle_formatting_request(connection: &Connection, req: Request, state: &Serv
     });
 
     let json = serde_json::to_value(result).unwrap_or(serde_json::Value::Null);
+    send_ok(connection, id, json);
+}
+
+fn handle_semantic_tokens_request(connection: &Connection, req: Request, state: &ServerState) {
+    let (id, params) = match cast_request::<SemanticTokensFullRequest>(req) {
+        Ok(pair) => pair,
+        Err(id) => return send_null_ok(connection, id),
+    };
+    let uri = &params.text_document.uri;
+    let lang = Language::from_uri(uri);
+    let result = state.documents.get(uri).and_then(|text| {
+        lang.map(|l| crate::semantic_tokens::handle_semantic_tokens(text, l))
+    });
+    let json = serde_json::to_value(result).unwrap_or(serde_json::Value::Null);
+    send_ok(connection, id, json);
+}
+
+fn handle_rename_request(connection: &Connection, req: Request, state: &ServerState) {
+    let (id, params) = match cast_request::<Rename>(req) {
+        Ok(pair) => pair,
+        Err(id) => return send_null_ok(connection, id),
+    };
+    let uri = params.text_document_position.text_document.uri.clone();
+    let pos = params.text_document_position.position;
+    let new_name = params.new_name;
+    let lang = Language::from_uri(&uri);
+    let result = state.documents.get(&uri).and_then(|text| {
+        lang.and_then(|l| crate::rename::handle_rename(text, l, uri.clone(), pos, &new_name))
+    });
+    let json = serde_json::to_value(result).unwrap_or(serde_json::Value::Null);
+    send_ok(connection, id, json);
+}
+
+fn handle_code_action_request(connection: &Connection, req: Request, state: &ServerState) {
+    let (id, params) = match cast_request::<CodeActionRequest>(req) {
+        Ok(pair) => pair,
+        Err(id) => return send_null_ok(connection, id),
+    };
+    let uri = &params.text_document.uri;
+    let pos = params.range.start;
+    let lang = Language::from_uri(uri);
+    let actions: Vec<lsp_types::CodeActionOrCommand> = state.documents.get(uri)
+        .map(|text| {
+            lang.map_or_else(Vec::new, |l| {
+                crate::rename::handle_code_actions(text, l, uri, pos)
+                    .into_iter()
+                    .map(lsp_types::CodeActionOrCommand::CodeAction)
+                    .collect()
+            })
+        })
+        .unwrap_or_default();
+    let json = serde_json::to_value(actions).unwrap_or(serde_json::Value::Null);
     send_ok(connection, id, json);
 }
 

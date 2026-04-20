@@ -39,10 +39,10 @@ shex-syntax = { path = "../shex-syntax", version = "0.0.0" }
 datalog-syntax = { path = "../datalog-syntax", version = "0.0.0" }
 thiserror = { workspace = true }
 
-[features]
-# Enable once pf-lsp-features merges its feature handler implementations.
-# Activating this feature un-gates the cfg blocks in tests/feature_stubs.rs.
-lsp-features-integrated = []
+[[bench]]
+name = "highlight"
+harness = false
 
 [dev-dependencies]
 serde_json = { workspace = true }
+criterion = { version = "0.5", features = ["html_reports"] }

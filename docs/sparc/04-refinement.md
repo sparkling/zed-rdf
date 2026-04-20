@@ -206,6 +206,22 @@ ADR-0024 executed as hierarchical parallel swarm (4 agents: architect → 3 work
 Exit gate met: hover-doc snapshots locked, formatter idempotency tests green. `cargo test --workspace` 0 failures.
 Wall-clock: ~1 session. Tagged `phase-e/done`.
 
+## Phase F retro (2026-04-20)
+
+ADR-0025 executed as two-stream parallel: `pf-lsp-protocol` (dispatch layer, Language enum, `run_server`) + `pf-lsp-features` (hover, completion, goto-def, document-symbols, formatting) working in separate worktrees. Integration pass merged the streams, resolved the stub/full conflict, un-gated 22 ignored tests (language detection + feature stubs).
+`rdf-lsp`: 455-line dispatch loop (lsp-server 0.7, FULL sync), 7 request types, all 11 parsers wired for diagnostics. Feature implementations: hover → rdf-vocab lookup, completion → per-language keyword lists, goto-def → Turtle @prefix resolver, document-symbols → heuristic extractor, formatting → parse+rewrite via rdf-format.
+Exit gate met: 47 tests green (23 unit + 17 language-detection + 5 feature integration + 2 server-api). `cargo test --workspace` 0 failures; clippy clean; deny check ok.
+Wall-clock: ~1 session. Tagged `phase-f/done`.
+
+## Phase G retro (2026-04-20)
+
+ADR-0026 executed in-session (orchestrator implemented all three features directly after freezing shared contracts).
+`semantic_tokens.rs`: 9-token-type legend, delta-encoded provider for Turtle/TriG, NT/NQ, SPARQL, ShEx, Datalog; RdfXml/JsonLd/TriX/N3 return empty (no lexical token structure exposed). `rename.rs`: Turtle prefix-label rename (all `<label>:` occurrences), SPARQL variable rename (`?var`/`$var`); code actions: sort-prefixes, add-missing-prefix (13 well-known namespaces), extract-prefix. `incremental.rs`: ParseCache with skip-on-no-change; statement-boundary helpers.
+All wired into `dispatch.rs` (semantic-tokens, rename, code-action handlers + capability declarations).
+Performance gate: criterion bench `highlight_10k_turtle` = 562 µs (target ≤ 100 ms); gate passes by 178×.
+Exit gate met: 21 Phase G integration tests green; `cargo test --workspace` 0 failures; clippy clean; deny check ok.
+Wall-clock: ~1 session. Tagged `phase-g/done`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:
