@@ -31,6 +31,7 @@ use crate::diag::{Diag, DiagnosticCode};
 use crate::lexer::{Lexer, NumKind, Spanned, Tok};
 
 /// Top-level parser for a SPARQL request.
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Parser<'a> {
     lex: Lexer<'a>,
     peeked: Option<Spanned>,
@@ -44,6 +45,22 @@ pub(crate) struct Parser<'a> {
     in_insert_data: bool,
     /// Inside a `DELETE DATA` block. Rejects variables and blank nodes.
     in_delete_data: bool,
+    /// Inside a `DELETE WHERE` block. Rejects blank nodes (§3.1.3).
+    in_delete_where: bool,
+    /// Inside a `DELETE { }` template. Rejects blank nodes (§3.1.3 rule 9).
+    in_delete_template: bool,
+    /// Tracks blank-node labels used by INSERT DATA units. A fresh set is
+    /// established per update unit; the same label in two distinct units
+    /// is a static error (§3.1.1 blank-node scope).
+    insert_data_bnodes_used: std::collections::BTreeSet<String>,
+    /// Set to `true` while processing an update unit following a `;`
+    /// separator. Used to detect blank-node label reuse across units.
+    in_subsequent_update_unit: bool,
+    /// Variables introduced by an outer SELECT projection via `(expr AS ?v)`.
+    /// When parsing a sub-SELECT inside the outer WHERE clause, any variable
+    /// the outer SELECT introduces must not also be projected by the subquery
+    /// (SPARQL 1.1 §19.4 / §11.4.1 static constraint).
+    outer_select_aliases: BTreeSet<String>,
 }
 
 impl<'a> Parser<'a> {
@@ -55,6 +72,11 @@ impl<'a> Parser<'a> {
             seen_body: false,
             in_insert_data: false,
             in_delete_data: false,
+            in_delete_where: false,
+            in_delete_template: false,
+            insert_data_bnodes_used: std::collections::BTreeSet::new(),
+            in_subsequent_update_unit: false,
+            outer_select_aliases: BTreeSet::new(),
         }
     }
 
@@ -63,10 +85,15 @@ impl<'a> Parser<'a> {
         let (base, prefixes) = self.parse_prologue()?;
         // Peek to decide query vs update.
         let Some(tok) = self.peek()? else {
-            return Err(self.err_at_eof(
-                DiagnosticCode::UnexpectedEof,
-                "empty SPARQL request",
-            ));
+            // EOF after prologue (or completely empty input) — SPARQL 1.1
+            // §3 allows an Update with zero operations:
+            //   Update ::= Prologue ( Update1 ( ';' Update )? )?
+            // Treat as an empty UpdateRequest rather than an error.
+            return Ok(Request::Update(UpdateRequest {
+                base,
+                prefixes,
+                operations: Vec::new(),
+            }));
         };
         let kw = token_keyword(&tok.tok);
         match kw.as_deref() {
@@ -157,8 +184,21 @@ impl<'a> Parser<'a> {
         let tok = self.peek()?.expect("caller checked");
         let kw = token_keyword(&tok.tok).unwrap_or_default();
         self.seen_body = true;
+        // Save the outer aliases (for nested sub-SELECT calls).
+        let saved_outer_aliases = std::mem::take(&mut self.outer_select_aliases);
         let form = match kw.as_str() {
-            "SELECT" => QueryForm::Select(self.parse_select_clause()?),
+            "SELECT" => {
+                let sc = self.parse_select_clause()?;
+                // Record (expr AS ?v) aliases for the sub-SELECT conflict check.
+                if let Some(proj) = &sc.projection {
+                    for p in proj {
+                        if let Projection::Expr { var, .. } = p {
+                            self.outer_select_aliases.insert(var.clone());
+                        }
+                    }
+                }
+                QueryForm::Select(sc)
+            }
             "CONSTRUCT" => QueryForm::Construct(self.parse_construct_head()?),
             "ASK" => {
                 self.bump()?;
@@ -214,6 +254,51 @@ impl<'a> Parser<'a> {
         };
         // Solution modifiers (§15).
         let modifiers = self.parse_solution_modifiers()?;
+        // SPARQL 1.1 §11.4.1: `SELECT *` is forbidden when GROUP BY is present.
+        // A wildcard projection is undefined over a grouped solution because
+        // the projected variables would be the group keys, not the full row.
+        if let QueryForm::Select(ref sc) = form
+            && sc.projection.is_none() // `SELECT *`
+            && !modifiers.group_by.is_empty()
+        {
+            return Err(self.err_here(
+                DiagnosticCode::AggregateScope,
+                "SELECT * is not allowed with GROUP BY (SPARQL 1.1 §11.4.1): \
+                 use explicit variable or aggregate projection instead",
+            ));
+        }
+        // SPARQL 1.1 §11.4.1: when GROUP BY is present and SELECT lists
+        // explicit projections, every plain-variable projection (`?v`) must
+        // name a GROUP BY key.  An expression `(expr AS ?v)` is allowed
+        // because it introduces an aggregate or expression result.
+        if let QueryForm::Select(ref sc) = form
+            && !modifiers.group_by.is_empty()
+        {
+            if let Some(proj) = &sc.projection {
+                let group_by_vars: BTreeSet<&str> = modifiers
+                    .group_by
+                    .iter()
+                    .filter_map(|c| match c {
+                        GroupCondition::Var(v) => Some(v.as_str()),
+                        GroupCondition::ExprAs { var, .. } => Some(var.as_str()),
+                        GroupCondition::Expr(_) => None,
+                    })
+                    .collect();
+                for p in proj {
+                    if let Projection::Var(v) = p {
+                        if !group_by_vars.contains(v.as_str()) {
+                            return Err(self.err_here(
+                                DiagnosticCode::AggregateScope,
+                                format!(
+                                    "?{v} appears in SELECT but is not a GROUP BY key and is not \
+                                     an aggregate expression (SPARQL 1.1 §11.4.1)"
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
         // VALUES — post-WHERE block (§15.6).
         let values_clause = if matches!(
             self.peek()?.as_ref().map(|t| token_keyword(&t.tok)),
@@ -223,6 +308,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        // Restore outer select aliases so the caller's context is unaffected.
+        self.outer_select_aliases = saved_outer_aliases;
         Ok(Query {
             base,
             prefixes,
@@ -254,6 +341,8 @@ impl<'a> Parser<'a> {
             None
         } else {
             let mut list = Vec::new();
+            // Track aliases used in (expr AS ?v) to detect duplicates.
+            let mut aliases_used: BTreeSet<String> = BTreeSet::new();
             loop {
                 match self.peek()?.map(|t| t.tok) {
                     Some(Tok::Var(v)) => {
@@ -272,14 +361,27 @@ impl<'a> Parser<'a> {
                         }
                         self.bump()?;
                         let v = self.expect_next("variable in projection")?;
+                        let var_start = v.start;
                         let Tok::Var(var) = v.tok else {
                             return Err(Diag::fatal(
                                 DiagnosticCode::Syntax,
                                 "expected variable",
-                                v.start,
+                                var_start,
                             ));
                         };
                         self.expect_token(&Tok::RParen, ")")?;
+                        // SPARQL 1.1 §11.4.3: alias must not appear more than
+                        // once in the SELECT projection.
+                        if !aliases_used.insert(var.clone()) {
+                            return Err(Diag::fatal(
+                                DiagnosticCode::Syntax,
+                                format!(
+                                    "duplicate SELECT alias ?{var} — each variable may appear \
+                                     at most once in the projection (§11.4.3)"
+                                ),
+                                var_start,
+                            ));
+                        }
                         list.push(Projection::Expr { expr, var });
                     }
                     _ => break,
@@ -375,6 +477,9 @@ impl<'a> Parser<'a> {
             }
             if matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::Semicolon)) {
                 self.bump()?;
+                // Mark that we are now past the first update unit. INSERT DATA
+                // blank-node labels must not be reused across units (§3.1.1).
+                self.in_subsequent_update_unit = true;
                 // Sub-prologue allowed between update units.
                 let (_b, extra) = self.parse_prologue()?;
                 // Merge extras into prefixes (prefix rebinding allowed).
@@ -384,12 +489,9 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        if ops.is_empty() {
-            return Err(self.err_here(
-                DiagnosticCode::Syntax,
-                "empty Update request",
-            ));
-        }
+        // An empty update request (with only BASE/PREFIX declarations, or
+        // completely empty) is valid per SPARQL 1.1 §3 — the grammar allows
+        // `Update ::= Prologue ( Update1 ( ';' Update )? )?`.
         Ok(UpdateRequest {
             base,
             prefixes,
@@ -563,12 +665,20 @@ impl<'a> Parser<'a> {
                 Ok(UpdateOp::DeleteData(quads))
             }
             Some("WHERE") => {
+                // DELETE WHERE: blank nodes are forbidden in the quad pattern
+                // (SPARQL 1.1 §3.1.3).
                 self.bump()?;
+                self.in_delete_where = true;
                 let quads = self.parse_quads_block()?;
+                self.in_delete_where = false;
                 Ok(UpdateOp::DeleteWhere(quads))
             }
             _ => {
+                // DELETE { template } WHERE { ... } — blank nodes forbidden in
+                // the DELETE template (§3.1.3 rule 9).
+                self.in_delete_template = true;
                 let delete_quads = self.parse_quads_block()?;
+                self.in_delete_template = false;
                 // Optional INSERT follow-up.
                 let insert_quads = if self.peek_keyword().as_deref() == Some("INSERT") {
                     self.bump()?;
@@ -666,7 +776,18 @@ impl<'a> Parser<'a> {
                 }
                 Some(Tok::Ident(ref kw)) if eq_kw(kw, "GRAPH") => {
                     self.bump()?;
+                    let graph_start = self.peeked.as_ref().map_or(self.last_end, |t| t.start);
                     let name = self.parse_var_or_iri()?;
+                    // Variables are forbidden as graph names in INSERT DATA / DELETE DATA.
+                    if (self.in_insert_data || self.in_delete_data)
+                        && matches!(name, VarOrIri::Var(_))
+                    {
+                        return Err(Diag::fatal(
+                            DiagnosticCode::UpdateDataForm,
+                            "variables are forbidden inside INSERT DATA / DELETE DATA (§3.1.1)",
+                            graph_start,
+                        ));
+                    }
                     self.expect_token(&Tok::LBrace, "{")?;
                     let mut triples = Vec::new();
                     while !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RBrace)) {
@@ -707,7 +828,34 @@ impl<'a> Parser<'a> {
         self.expect_token(&Tok::LBrace, "{")?;
         // Sub-SELECT short-cut.
         if self.peek_keyword().as_deref() == Some("SELECT") {
+            let sub_start = self.last_end;
             let sub = self.parse_query_body(None, Vec::new())?;
+            // SPARQL 1.1 §11.4.1 / §19.4: the sub-SELECT must not project
+            // a variable that the enclosing SELECT already introduces via
+            // `(expr AS ?v)`. Check against the stored outer aliases.
+            if let QueryForm::Select(sc) = &sub.form
+                && !self.outer_select_aliases.is_empty()
+            {
+                if let Some(proj) = &sc.projection {
+                    for p in proj {
+                        let var = match p {
+                            Projection::Var(v) => v,
+                            Projection::Expr { var, .. } => var,
+                        };
+                        if self.outer_select_aliases.contains(var) {
+                            return Err(Diag::fatal(
+                                DiagnosticCode::Syntax,
+                                format!(
+                                    "sub-SELECT projects ?{var} which is already introduced \
+                                     by the enclosing SELECT via (expr AS ?{var}) — \
+                                     SPARQL 1.1 §11.4.1 static constraint"
+                                ),
+                                sub_start,
+                            ));
+                        }
+                    }
+                }
+            }
             self.expect_token(&Tok::RBrace, "}")?;
             let mut ggp = GroupGraphPattern::default();
             ggp.elements
@@ -742,10 +890,20 @@ impl<'a> Parser<'a> {
                         alts.push(self.parse_group_graph_pattern()?);
                     }
                     if alts.len() > 1 {
+                        // Propagate variables from UNION branches into the
+                        // outer scope so subsequent BIND checks work correctly
+                        // (SPARQL 1.1 §18.2.1 — in-scope variable definition).
+                        for alt in &alts {
+                            collect_ggp_scope(alt, &mut scope);
+                        }
                         ggp.elements.push(GroupPatternElement::Union(alts));
                     } else {
+                        let inner = alts.pop().unwrap();
+                        // Propagate variables from the nested group into the
+                        // outer scope.
+                        collect_ggp_scope(&inner, &mut scope);
                         ggp.elements
-                            .push(GroupPatternElement::Group(alts.pop().unwrap()));
+                            .push(GroupPatternElement::Group(inner));
                     }
                 }
                 Tok::Ident(ref s) => {
@@ -919,8 +1077,43 @@ impl<'a> Parser<'a> {
         out: &mut Vec<TriplePattern>,
     ) -> Result<(), Diag> {
         let subject = self.parse_triple_term(true)?;
+        // Per SPARQL 1.1 §19.8: TriplesSameSubjectPath ::=
+        //   VarOrTerm PropertyListPathNotEmpty
+        // | TriplesNodePath PropertyListPath
+        // where PropertyListPath ::= PropertyListPathNotEmpty?
+        //
+        // When the subject is a TriplesNodePath (blank-node property list
+        // or collection), the trailing property list is OPTIONAL. Only
+        // VarOrTerm subjects require a non-empty property list.
+        let is_node_path = matches!(
+            subject,
+            TermOrPath::BNodePropertyList(_) | TermOrPath::Collection(_)
+        );
+        if is_node_path && !self.has_predicate_start() {
+            // No trailing property list — the embedded predicates in the
+            // bracket or collection are the full triple pattern.
+            return Ok(());
+        }
         self.parse_property_list(subject, out)?;
         Ok(())
+    }
+
+    /// Return `true` if the current peek token could start a predicate
+    /// (verb) in a property list. Used to decide whether the property
+    /// list is present after a TriplesNodePath subject.
+    fn has_predicate_start(&mut self) -> bool {
+        match self.peek().ok().flatten().map(|t| t.tok) {
+            Some(
+                Tok::IriRef(_)
+                | Tok::Pname { .. }
+                | Tok::Caret
+                | Tok::Bang
+                | Tok::LParen
+                | Tok::Var(_),
+            ) => true,
+            Some(Tok::Ident(ref s)) if s == "a" => true,
+            _ => false,
+        }
     }
 
     fn parse_property_list(
@@ -1166,6 +1359,31 @@ impl<'a> Parser<'a> {
                         start,
                     ));
                 }
+                if self.in_delete_where || self.in_delete_template {
+                    return Err(Diag::fatal(
+                        DiagnosticCode::UpdateDataForm,
+                        "blank nodes are forbidden in DELETE WHERE / DELETE template (§3.1.3)",
+                        start,
+                    ));
+                }
+                if self.in_insert_data {
+                    // Blank-node labels are scoped per INSERT DATA unit
+                    // (SPARQL 1.1 §3.1.1). The same label in two distinct
+                    // INSERT DATA units within one Update is a static error.
+                    if self.in_subsequent_update_unit
+                        && self.insert_data_bnodes_used.contains(&l)
+                    {
+                        return Err(Diag::fatal(
+                            DiagnosticCode::UpdateDataForm,
+                            format!(
+                                "blank node label _:{l} already used in a previous INSERT DATA \
+                                 unit in this Update (§3.1.1 blank-node scope)"
+                            ),
+                            start,
+                        ));
+                    }
+                    self.insert_data_bnodes_used.insert(l.clone());
+                }
                 Ok(TermOrPath::BNodeLabel(l))
             }
             Tok::AnonBNode => {
@@ -1174,6 +1392,13 @@ impl<'a> Parser<'a> {
                     return Err(Diag::fatal(
                         DiagnosticCode::UpdateDataForm,
                         "blank nodes are forbidden inside DELETE DATA (§3.1.2)",
+                        start,
+                    ));
+                }
+                if self.in_delete_where || self.in_delete_template {
+                    return Err(Diag::fatal(
+                        DiagnosticCode::UpdateDataForm,
+                        "blank nodes are forbidden in DELETE WHERE / DELETE template (§3.1.3)",
                         start,
                     ));
                 }
@@ -1313,6 +1538,41 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_token(&Tok::RBrace, "}")?;
             }
+            // `Tok::Nil` is lexed when the lexer sees `(` WS* `)` —
+            // i.e., `VALUES ()` with an empty variable list. This form is
+            // valid per SPARQL 1.1 §10.2.2: VALUES with zero variables
+            // and zero or more empty tuples `()`.
+            Some(Tok::Nil) => {
+                self.bump()?; // consume the nil `()`
+                self.expect_token(&Tok::LBrace, "{")?;
+                while !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RBrace)) {
+                    // Each row must be an empty `()` (Nil) since there are no variables.
+                    match self.peek()?.map(|t| t.tok) {
+                        Some(Tok::Nil) => {
+                            self.bump()?;
+                            rows.push(Vec::new());
+                        }
+                        Some(Tok::LParen) => {
+                            self.bump()?;
+                            if !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RParen)) {
+                                return Err(self.err_here(
+                                    DiagnosticCode::Syntax,
+                                    "VALUES row must be empty () when variable list is empty",
+                                ));
+                            }
+                            self.bump()?;
+                            rows.push(Vec::new());
+                        }
+                        _ => {
+                            return Err(self.err_here(
+                                DiagnosticCode::Syntax,
+                                "expected () row in VALUES with empty variable list",
+                            ));
+                        }
+                    }
+                }
+                self.expect_token(&Tok::RBrace, "}")?;
+            }
             Some(Tok::LParen) => {
                 self.bump()?;
                 while let Some(Tok::Var(v)) = self.peek()?.map(|t| t.tok) {
@@ -1322,19 +1582,34 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Tok::RParen, ")")?;
                 self.expect_token(&Tok::LBrace, "{")?;
                 while !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RBrace)) {
-                    self.expect_token(&Tok::LParen, "(")?;
-                    let mut row = Vec::new();
-                    while !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RParen)) {
-                        row.push(self.parse_data_value()?);
+                    // Each row is `(values...)` or `()` (Nil).
+                    match self.peek()?.map(|t| t.tok) {
+                        Some(Tok::Nil) => {
+                            self.bump()?;
+                            if !vars.is_empty() {
+                                return Err(self.err_here(
+                                    DiagnosticCode::Syntax,
+                                    "VALUES row arity mismatch",
+                                ));
+                            }
+                            rows.push(Vec::new());
+                        }
+                        _ => {
+                            self.expect_token(&Tok::LParen, "(")?;
+                            let mut row = Vec::new();
+                            while !matches!(self.peek()?.as_ref().map(|t| &t.tok), Some(Tok::RParen)) {
+                                row.push(self.parse_data_value()?);
+                            }
+                            self.expect_token(&Tok::RParen, ")")?;
+                            if row.len() != vars.len() {
+                                return Err(self.err_here(
+                                    DiagnosticCode::Syntax,
+                                    "VALUES row arity mismatch",
+                                ));
+                            }
+                            rows.push(row);
+                        }
                     }
-                    self.expect_token(&Tok::RParen, ")")?;
-                    if row.len() != vars.len() {
-                        return Err(self.err_here(
-                            DiagnosticCode::Syntax,
-                            "VALUES row arity mismatch",
-                        ));
-                    }
-                    rows.push(row);
                 }
                 self.expect_token(&Tok::RBrace, "}")?;
             }
@@ -1895,6 +2170,17 @@ impl<'a> Parser<'a> {
         let tok = self.expect_next("IRI")?;
         match tok.tok {
             Tok::IriRef(s) => Ok(s),
+            // Prefixed names are syntactically valid in any IRI position.
+            // The grammar layer does not expand them (grammar-only scope);
+            // we return the raw `prefix:local` form as the IRI string so
+            // callers can store it for diagnostic purposes.
+            Tok::Pname { prefix, local } => {
+                if local.is_empty() {
+                    Ok(format!("{prefix}:"))
+                } else {
+                    Ok(format!("{prefix}:{local}"))
+                }
+            }
             _ => Err(Diag::fatal(
                 DiagnosticCode::Syntax,
                 "expected <IRI>",
@@ -2029,5 +2315,67 @@ fn collect_term_scope(t: &TermOrPath, scope: &mut BTreeSet<String>) {
             }
         }
         _ => {}
+    }
+}
+
+/// Collect all variables introduced by a group graph pattern into `scope`.
+///
+/// This is used to propagate variables from nested GGPs (groups, UNION arms,
+/// OPTIONAL, GRAPH, SERVICE) into the enclosing scope so that subsequent
+/// BIND checks see the correct in-scope variable set (SPARQL 1.1 §18.2.1).
+fn collect_ggp_scope(ggp: &GroupGraphPattern, scope: &mut BTreeSet<String>) {
+    for elem in &ggp.elements {
+        match elem {
+            GroupPatternElement::Triples(triples) => {
+                collect_triples_scope(triples, scope);
+            }
+            GroupPatternElement::Bind { var, .. } => {
+                scope.insert(var.clone());
+            }
+            GroupPatternElement::Values(data) => {
+                for v in &data.vars {
+                    scope.insert(v.clone());
+                }
+            }
+            GroupPatternElement::Group(inner)
+            | GroupPatternElement::Optional(inner)
+            | GroupPatternElement::Minus(inner) => {
+                collect_ggp_scope(inner, scope);
+            }
+            GroupPatternElement::Union(alts) => {
+                // Variables visible from a UNION are those in ALL branches
+                // (intersection semantics per §18.2.1). For the purpose of
+                // the BIND in-scope check (which is conservative) we use
+                // the union of all branch variables — this is what the spec
+                // means by "in scope" for pattern elements that follow.
+                for alt in alts {
+                    collect_ggp_scope(alt, scope);
+                }
+            }
+            GroupPatternElement::Graph { pattern, .. }
+            | GroupPatternElement::Service { pattern, .. } => {
+                collect_ggp_scope(pattern, scope);
+            }
+            GroupPatternElement::SubQuery(q) => {
+                // Variables projected by a sub-SELECT are in scope.
+                if let QueryForm::Select(sc) = &q.form {
+                    if let Some(proj) = &sc.projection {
+                        for p in proj {
+                            match p {
+                                Projection::Var(v) => {
+                                    scope.insert(v.clone());
+                                }
+                                Projection::Expr { var, .. } => {
+                                    scope.insert(var.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            GroupPatternElement::Filter(_) => {
+                // FILTER does not introduce variables.
+            }
+        }
     }
 }

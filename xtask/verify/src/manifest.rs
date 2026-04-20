@@ -55,6 +55,7 @@ use rdf_jsonld::JsonLdParser;
 use rdf_ntriples::{NQuadsParser, NTriplesParser};
 use rdf_turtle::{TriGParser, TurtleParser};
 use rdf_xml::RdfXmlParser;
+use sparql_syntax::SparqlParser;
 
 /// Kind of test declared by the W3C manifest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -490,6 +491,12 @@ fn parse_for_language(
                 JsonLdParser::with_base(b).parse(input)
             })
             .map_err(|d| format_diag(&d.messages)),
+        // Phase C: SPARQL 1.1 query and update syntax (ADR-0022).
+        // Both forms share the same parser — SparqlParser detects the
+        // form (Query vs Update) from the leading keyword.
+        "sparql-query" | "sparql-update" | "sparql" => SparqlParser::new()
+            .parse(input)
+            .map_err(|d| format_diag(&d.messages)),
         other => Err(format!("no main parser registered for language `{other}`")),
     }
 }
@@ -565,28 +572,47 @@ fn build_sp_index(facts: &Facts) -> BTreeMap<(String, String), Vec<String>> {
     index
 }
 
-/// Recognise an rdft test-type IRI. Returns `None` for list entries,
-/// `mf:Manifest`, or anything outside the rdft vocabulary.
+/// Recognise an rdft or mf test-type IRI. Returns `None` for list entries,
+/// `mf:Manifest`, or anything outside the rdft/mf vocabulary.
 fn classify_test_type(type_iri: &str) -> Option<TestKind> {
     // Strip the angle brackets we added during canonicalisation.
     let inner = type_iri.strip_prefix('<')?.strip_suffix('>')?;
-    // Trim the rdft namespace. We accept both the standard `ns/rdftest#`
-    // root and the legacy `test-manifest#` prefix a few older manifests
-    // still use.
-    let local = inner
+
+    // Phase A/B: rdft namespace (Turtle, N-Triples, N-Quads, TriG, etc.)
+    // We accept both the standard `ns/rdftest#` root and the legacy
+    // `test-manifest#` prefix a few older manifests still use.
+    if let Some(local) = inner
         .strip_prefix("http://www.w3.org/ns/rdftest#")
-        .or_else(|| inner.strip_prefix("http://www.w3.org/2013/TurtleTests/"))?;
-    if local.ends_with("PositiveSyntax") {
-        Some(TestKind::PositiveSyntax)
-    } else if local.ends_with("NegativeSyntax") {
-        Some(TestKind::NegativeSyntax)
-    } else if local.ends_with("NegativeEval") {
-        Some(TestKind::NegativeEval)
-    } else if local.ends_with("Eval") {
-        Some(TestKind::Eval)
-    } else {
-        None
+        .or_else(|| inner.strip_prefix("http://www.w3.org/2013/TurtleTests/"))
+    {
+        if local.ends_with("PositiveSyntax") {
+            return Some(TestKind::PositiveSyntax);
+        } else if local.ends_with("NegativeSyntax") {
+            return Some(TestKind::NegativeSyntax);
+        } else if local.ends_with("NegativeEval") {
+            return Some(TestKind::NegativeEval);
+        } else if local.ends_with("Eval") {
+            return Some(TestKind::Eval);
+        }
+        return None;
     }
+
+    // Phase C: SPARQL 1.1 test-manifest namespace (mf:).
+    // mf:PositiveSyntaxTest11   → parser must accept.
+    // mf:NegativeSyntaxTest11   → parser must reject.
+    // mf:PositiveUpdateSyntaxTest11 → parser must accept (update form).
+    // mf:NegativeUpdateSyntaxTest11 → parser must reject (update form).
+    if let Some(local) = inner
+        .strip_prefix("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#")
+    {
+        if local == "PositiveSyntaxTest11" || local == "PositiveUpdateSyntaxTest11" {
+            return Some(TestKind::PositiveSyntax);
+        } else if local == "NegativeSyntaxTest11" || local == "NegativeUpdateSyntaxTest11" {
+            return Some(TestKind::NegativeSyntax);
+        }
+    }
+
+    None
 }
 
 /// Extract the lexical form of a canonical literal (`"text"` or
@@ -715,6 +741,24 @@ pub(crate) fn discover_manifests_for_language(
         found.push(direct);
     }
 
+    // Phase C: SPARQL syntax tests live at known subdirectory paths under
+    // `external/tests/sparql/`. The top-level manifests (manifest-sparql11-query.ttl
+    // etc.) use `mf:include` lists that our runner doesn't follow, so we
+    // point directly at the syntax sub-manifests instead.
+    if language == "sparql-query" || language == "sparql-update" || language == "sparql" {
+        // The SPARQL corpus root is always the "sparql" directory regardless of
+        // whether the caller asked for "sparql", "sparql-query", or "sparql-update".
+        let sparql_root = vendored_root.join("sparql");
+        for sub in &["syntax-query", "syntax-update-1", "syntax-update-2"] {
+            let m = sparql_root.join(sub).join("manifest.ttl");
+            if m.is_file() && !found.contains(&m) {
+                found.push(m);
+            }
+        }
+        found.sort();
+        return found;
+    }
+
     // Legacy shape: `external/tests/<vendor>/rdf/**/rdf-<alias>/manifest.ttl`.
     let aliases: &[&str] = match language {
         "nt" => &["rdf-n-triples"],
@@ -722,7 +766,6 @@ pub(crate) fn discover_manifests_for_language(
         "ttl" => &["rdf-turtle"],
         "trig" => &["rdf-trig"],
         "rdfxml" => &["rdf-xml"],
-        "sparql" => &[], // SPARQL manifests don't use rdft syntax tests.
         _ => &[],
     };
     if !aliases.is_empty() {

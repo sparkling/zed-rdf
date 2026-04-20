@@ -66,5 +66,7 @@ rdf-xml = { path = "../../crates/rdf-xml", version = "0.0.0" }
 rdf-jsonld = { path = "../../crates/rdf-jsonld", version = "0.0.0" }
 rdf-trix = { path = "../../crates/rdf-trix", version = "0.0.0" }
 rdf-n3 = { path = "../../crates/rdf-n3", version = "0.0.0" }
+# Phase C: SPARQL syntax parser (ADR-0022).
+sparql-syntax = { path = "../../crates/sparql-syntax", version = "0.0.0" }
 rdf-xml-shadow = { path = "../../crates/syntax/rdf-xml-shadow", version = "0.0.0", optional = true }
 rdf-jsonld-shadow = { path = "../../crates/syntax/rdf-jsonld-shadow", version = "0.0.0", optional = true }

@@ -144,6 +144,18 @@ and agent IDs differ.
 | `pb-adv-n3`     | `tester`        | cohort-b | claude-sonnet-4-6 | Adversary fixture corpus for n3.                |
 | `pb-adv-veto`   | `code-analyzer` | cohort-b | claude-sonnet-4-6 | Veto register; audit at `.claude-flow/audit/adversary-veto/register.md`. |
 
+## Phase C agents (ADR-0022)
+
+**Audit window:** from `phase-c/start` to `phase-c/done`.
+
+### Phase C — Cohort A (`phase-c`)
+
+| Agent id | RuFlo role | Lineage | Base model | Notes |
+|----------|-----------|---------|-----------|-------|
+| `pc-sparql-wiring` | `backend-dev` | cohort-a | claude-opus-4-7 | xtask/verify sparql + integration tests. |
+| `pc-tester` | `tester` | cohort-a | claude-opus-4-7 | Adversary fixture un-ignore + snapshots. |
+| `pc-reviewer` | `reviewer` | cohort-a | claude-opus-4-7 | ADR-0017 §7 gate review. |
+
 ## Audit log
 
 - 2026-04-19 — registry frozen during ADR-0020 pre-flight. Cohort A
@@ -155,3 +167,4 @@ and agent IDs differ.
   9 cohort-A agents (2 with sonnet-4-6 model override) + 6 cohort-B
   adversary agents. Total 15 — at ADR-0017 ceiling. — Orchestrator,
   session `session-1776711885748`.
+- 2026-04-20 — Phase C cohort rows appended. 3 cohort-A agents. sparql-syntax implementation pre-existing; Phase C work is test wiring + W3C conformance. — Orchestrator, session session-1776716816155.

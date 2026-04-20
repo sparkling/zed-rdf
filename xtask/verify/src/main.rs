@@ -574,7 +574,7 @@ fn verify_language(
 /// for the other languages runs but they never contribute test
 /// executions.
 fn language_has_main_parser(lang: &str) -> bool {
-    matches!(lang, "nt" | "nq" | "ttl" | "trig")
+    matches!(lang, "nt" | "nq" | "ttl" | "trig" | "rdfxml" | "jsonld" | "sparql")
 }
 
 fn discover_corpora(root: &Path, lang: &str, smoke: bool) -> Result<Vec<PathBuf>, String> {

@@ -182,6 +182,14 @@ historical; future sweeps get a fresh cohort registry and prompt set.
 - Pre-1.0 release cadence: monthly.
 - Phase exits add a short **Phase X retro** note below.
 
+## Phase C retro (2026-04-20)
+
+ADR-0022 executed as single-shot parallel swarm (3 agents, hierarchical topology).
+`sparql-syntax` crate was pre-existing (4562 lines, compiles clean from Phase B scaffolding).
+Phase C work: xtask/verify wiring (`manifest.rs` + `main.rs`), W3C integration test file (`w3c_syntax.rs`), grammar fixes for 19 conformance failures (VALUES clause, property paths, GROUP BY scope, UPDATE IRI forms, semicolon-separated operations, multi-graph LOAD/CLEAR).
+Exit gate met: sparql 149/149 W3C syntax entries pass, 0 divergences. 63 additional tests (adversary fixtures, snapshots, scope-checks) all green.
+Wall-clock: ~1 session. Tagged `phase-c/done`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:

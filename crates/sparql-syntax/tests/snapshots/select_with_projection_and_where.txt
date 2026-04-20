@@ -1,0 +1,5 @@
+<urn:x-sparql-syntax:form> = "SELECT"
+<urn:x-sparql-syntax:kind> = "query"
+<urn:x-sparql-syntax:projection> = "?o"
+<urn:x-sparql-syntax:projection> = "?s"
+<urn:x-sparql-syntax:where> = "{ ?s <http://ex/p> ?o }"

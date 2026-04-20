@@ -886,6 +886,7 @@ dependencies = [
  "rdf-diagnostics",
  "rdf-diff",
  "rdf-iri",
+ "rdf-turtle",
  "thiserror",
 ]
 
@@ -1046,6 +1047,7 @@ dependencies = [
  "rdf-turtle-shadow",
  "rdf-xml",
  "rdf-xml-shadow",
+ "sparql-syntax",
 ]
 
 [[package]]

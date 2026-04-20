@@ -1,0 +1,4 @@
+<urn:x-sparql-syntax:construct-template> = "?s <http://ex/p> ?o"
+<urn:x-sparql-syntax:form> = "CONSTRUCT"
+<urn:x-sparql-syntax:kind> = "query"
+<urn:x-sparql-syntax:where> = "{ ?s <http://ex/r> ?o }"

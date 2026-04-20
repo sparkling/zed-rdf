@@ -1,0 +1,3 @@
+<urn:x-sparql-syntax:insert-data> = "{ <http://ex/s> <http://ex/p> <http://ex/o> }"
+<urn:x-sparql-syntax:kind> = "update"
+<urn:x-sparql-syntax:op> = "INSERT_DATA"
