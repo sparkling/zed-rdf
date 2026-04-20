@@ -670,6 +670,8 @@ dependencies = [
  "lsp-server",
  "lsp-types 0.95.1",
  "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-format",
  "rdf-iri",
  "rdf-jsonld",
  "rdf-n3",
