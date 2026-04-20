@@ -9,7 +9,9 @@ extension` to catch schema mistakes without opening Zed.
 
 from __future__ import annotations
 
+import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -70,6 +72,51 @@ ZED_BUILTIN_GRAMMARS = {
 }
 
 
+_GRAMMAR_CACHE: dict[tuple[str, str], str | None] = {}
+
+
+def _grammar_js_name(repo_url: str, commit: str | None) -> str | None:
+    """Fetch grammar.js from the pinned commit and return the exported
+    grammar name (the value of `name: '...'` at the top level of the
+    grammar definition). Returns None if anything goes wrong —
+    network, shallow clone, parse — since this check is advisory.
+    """
+    if commit is None:
+        return None
+    key = (repo_url, commit)
+    if key in _GRAMMAR_CACHE:
+        return _GRAMMAR_CACHE[key]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--filter=blob:none",
+                 "--no-checkout", repo_url, tmp],
+                check=True, capture_output=True, timeout=60,
+            )
+            subprocess.run(
+                ["git", "fetch", "--depth", "1", "origin", commit],
+                cwd=tmp, check=True, capture_output=True, timeout=60,
+            )
+            subprocess.run(
+                ["git", "checkout", "FETCH_HEAD", "--", "grammar.js"],
+                cwd=tmp, check=True, capture_output=True, timeout=30,
+            )
+            grammar_js = (Path(tmp) / "grammar.js").read_text()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+            _GRAMMAR_CACHE[key] = None
+            return None
+
+    # Find `name: '...'` or `name: "..."` as the first top-level field
+    # of the grammar() call. Loose regex; good enough for the canonical
+    # tree-sitter grammar.js shape.
+    import re
+    m = re.search(r"""name:\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]""", grammar_js)
+    result = m.group(1) if m else None
+    _GRAMMAR_CACHE[key] = result
+    return result
+
+
 def fatal(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -124,6 +171,30 @@ def main() -> None:
         unknown_keys = entry.keys() - ALLOWED_GRAMMAR_KEYS
         if unknown_keys:
             warn(f"'grammars.{name}' has unknown keys {sorted(unknown_keys)}")
+
+        # Verify the grammar repo actually exports `tree_sitter_<name>`.
+        # Zed links the compiled grammar WASM with
+        # `--export=tree_sitter_<grammar-name>`, and fails the install
+        # if the symbol isn't present. The exported symbol is
+        # determined by the `name` field in the grammar's grammar.js
+        # (first top-level `name: '...'`).
+        repo_url = entry["repository"]
+        commit = entry.get("commit") or entry.get("rev")
+        exported = _grammar_js_name(repo_url, commit)
+        if exported is None:
+            warn(
+                f"could not verify grammar.js exported name for "
+                f"grammars.{name} ({repo_url}); skipping symbol check"
+            )
+        elif exported != name:
+            fatal(
+                f"grammars.{name} references {repo_url} whose grammar.js "
+                f"declares `name: '{exported}'`. Zed will link the WASM "
+                f"with `--export=tree_sitter_{name}` and fail because the "
+                f"symbol exported is `tree_sitter_{exported}`. Either "
+                f"rename the [grammars.*] key to '{exported}' or use a "
+                f"different grammar repo."
+            )
 
     language_servers = manifest.get("language_servers", {})
     if not isinstance(language_servers, dict):

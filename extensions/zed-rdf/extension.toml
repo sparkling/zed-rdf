@@ -35,9 +35,8 @@ commit = "7f789ea7ef765080f71a298fc96b7c957fa24422"
 repository = "https://github.com/GordianDziwis/tree-sitter-sparql"
 commit = "1ef52d35a73a2a5f2e433ecfd1c751c1360a923b"
 
-# N-Triples / N-Quads reuse the Turtle grammar — NT/NQ is a syntactic
-# subset of Turtle, and GordianDziwis/tree-sitter-turtle's node
-# vocabulary covers both forms cleanly.
-[grammars.ntriples]
-repository = "https://github.com/GordianDziwis/tree-sitter-turtle"
-commit = "7f789ea7ef765080f71a298fc96b7c957fa24422"
+# N-Triples, N-Quads, TriG, and N3 all share the `turtle` grammar. They
+# are syntactic subsets / supersets of Turtle, and the `turtle` node
+# vocabulary covers all four. Zed matches grammar name to exported
+# symbol (`tree_sitter_turtle`), so we reference it by the same name
+# from each language's config.toml rather than declaring an alias.

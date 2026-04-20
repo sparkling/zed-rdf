@@ -1,5 +1,5 @@
 name = "N-Quads"
-grammar = "ntriples"
+grammar = "turtle"
 path_suffixes = ["nq"]
 line_comments = ["# "]
 tab_size = 2

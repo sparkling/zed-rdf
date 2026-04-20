@@ -1,5 +1,5 @@
 name = "N-Triples"
-grammar = "ntriples"
+grammar = "turtle"
 path_suffixes = ["nt"]
 line_comments = ["# "]
 tab_size = 2
