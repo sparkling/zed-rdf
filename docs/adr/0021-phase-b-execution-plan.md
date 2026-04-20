@@ -1,13 +1,14 @@
 # ADR-0021: Phase B execution plan — remaining RDF syntax via single-shot parallel swarm
 
-- **Status:** Accepted
+- **Status:** Historical
 - **Date:** 2026-04-20
+- **Completed:** 2026-04-20 (commit `a0c466a` — "Land Phase B — RDF/XML, JSON-LD, TriX, N3 parsers; shadow diffs; adversary hive")
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
 - **Instantiates:** [ADR-0017](0017-execution-model.md) (execution
   policy), [ADR-0019](0019-independent-verification.md) (independent
   verification)
-- **Retires-on:** tag `phase-b/done`
+- **Retired-on:** commit `a0c466a` (Phase B tag; see §Consequences)
 - **Tags:** `process`, `execution`, `phase-b`, `agents`, `swarm`,
   `hive`, `ruflo`, `parallel`
 
@@ -252,6 +253,36 @@ Every prompt carries:
 - **Adversary veto fires** ≥ 1 time across the sweep.
 - **W3C gate green** per §6.3 above before the ADR flips to Accepted.
 - **Wall-clock** ≤ 72 h from spawn to `phase-b/done` tag.
+
+## Outcome (filled on retirement)
+
+Executed as planned. Key actuals vs. predictions:
+
+- **Spawn shape:** single-shot parallel swarm as decided — all main +
+  shadow + adversary agents launched in one message. 15-agent ceiling
+  was met.
+- **Parsers landed:** `rdf-xml` (RDF/XML 1.1), `rdf-jsonld` (JSON-LD
+  1.1 syntax + `@context` well-formedness), `rdf-trix` (TriX XML
+  wrapper), `rdf-n3` (Notation3, Turtle superset). All implement
+  `rdf_diff::Parser`.
+- **Shadows landed:** `rdf-xml-shadow`, `rdf-jsonld-shadow` —
+  independent implementations on cohort-B model override; divergence
+  was non-zero on first run (invariant satisfied, ADR-0019 §Validation).
+- **Adversary hive:** 33 findings documented; 24 vetoes fired
+  (per CHANGELOG.md verification sweep summary).
+- **W3C gate:** RDF/XML and JSON-LD syntax suites 100 % green;
+  TriX + N3 snapshot corpora green.
+- **All Phase B exit gates met** per `docs/sparc/04-refinement.md`
+  Phase B retro.
+- **Validation checks (§Validation):**
+  - Single spawn message: ✓
+  - Cohort separation: ✓ (`cohort-guard.mjs` audit clean)
+  - Shadow divergence non-zero: ✓
+  - Adversary veto fired ≥ 1: ✓ (24 fired)
+  - W3C gate green: ✓
+  - Wall-clock ≤ 72 h: ✓ (single session)
+
+This ADR is now **historical**; consult as precedent only.
 
 ## Links
 
