@@ -251,6 +251,52 @@ def main() -> None:
                     f"{sorted(grammars)})"
                 )
 
+            # BracketPair schema: per language_core::language_config.
+            # Required: start (str), end (str), close (bool), newline (bool).
+            # Optional (defaults true): surround (bool).
+            brackets = cfg.get("brackets")
+            if brackets is not None:
+                if not isinstance(brackets, list):
+                    fatal(
+                        f"{config_path}: 'brackets' must be an array of "
+                        f"tables (`[[brackets]]`), not a single table"
+                    )
+                for i, b in enumerate(brackets):
+                    if not isinstance(b, dict):
+                        fatal(f"{config_path}: brackets[{i}] must be a table")
+                    required = {"start", "end", "close", "newline"}
+                    missing = required - b.keys()
+                    if missing:
+                        fatal(
+                            f"{config_path}: brackets[{i}] missing required "
+                            f"fields {sorted(missing)}. BracketPair schema is "
+                            f"{{start: str, end: str, close: bool, "
+                            f"surround?: bool, newline: bool}}"
+                        )
+                    for str_field in ("start", "end"):
+                        if not isinstance(b[str_field], str):
+                            fatal(
+                                f"{config_path}: brackets[{i}].{str_field} "
+                                f"must be a string, got {type(b[str_field]).__name__}"
+                            )
+                    for bool_field in ("close", "newline"):
+                        if not isinstance(b[bool_field], bool):
+                            fatal(
+                                f"{config_path}: brackets[{i}].{bool_field} "
+                                f"must be a boolean, got {type(b[bool_field]).__name__}"
+                            )
+                    if "surround" in b and not isinstance(b["surround"], bool):
+                        fatal(
+                            f"{config_path}: brackets[{i}].surround must be "
+                            f"a boolean, got {type(b['surround']).__name__}"
+                        )
+                    unknown = b.keys() - (required | {"surround"})
+                    if unknown:
+                        warn(
+                            f"{config_path}: brackets[{i}] has unknown keys "
+                            f"{sorted(unknown)} — will fail schema validation"
+                        )
+
     missing_langs = declared_langs - config_langs.keys()
     if missing_langs:
         fatal(

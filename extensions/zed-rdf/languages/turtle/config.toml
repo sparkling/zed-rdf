@@ -8,11 +8,13 @@ hard_tabs = false
 [[brackets]]
 start = "("
 end = ")"
-close_before = ""
-newline_between = false
+close = true
+surround = true
+newline = false
 
 [[brackets]]
 start = "["
 end = "]"
-close_before = ""
-newline_between = false
+close = true
+surround = true
+newline = false
