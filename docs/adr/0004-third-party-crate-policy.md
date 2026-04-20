@@ -14,6 +14,10 @@
     IETF/Unicode-standard-implementing crates on a per-ADR basis.
     First admitted member: `idna` (RFC 3490 / UTS 46) for
     `rdf-iri`'s `ToASCII`. No RDF/SPARQL semantics; leaf dep only.
+  - ADR-0007 (2026-04-20): resolves the deferred "`chumsky` **or**
+    `winnow`" row to "hand-roll default; combinator admission
+    reopens per ADR-0007 §Reopen triggers." Row text amended in
+    §Allow-list (v1) below.
 - **Tags:** `policy`, `dependencies`, `supply-chain`
 
 ## Context and Problem Statement
@@ -64,7 +68,7 @@ role.**
 | `tower-lsp` (or `async-lsp`, TBD via ADR-0011) | LSP framework                 | Large boilerplate to replicate  | Hand-rolled LSP glue              |
 | `tokio`                         | Async runtime for LSP                             | Standard                        | Blocking stdlib loop              |
 | `tree-sitter` (ext. consumer)   | Zed embeds it — we only write `.scm` queries      | n/a                             | n/a                               |
-| `chumsky` **or** `winnow` (ADR-0007) | Parser combinators for complex grammars     | Writing Turtle/SPARQL by hand is viable but slower | Hand-written recursive descent |
+| — (deferred to ADR-0007; resolved 2026-04-20: hand-roll default; combinator admission reopens per ADR-0007 §Reopen triggers) | n/a | Phase A + Phase B formats ship hand-rolled; see ADR-0007 | Hand-written recursive descent |
 | `logos`                         | Lexer generator                                   | Speed + simplicity              | Hand-written tokenisers           |
 | `rowan` **or** `cstree`         | Lossless CST representation shared across parsers | Standard LSP-grade CST crate; reinventing is weeks | Custom CST types per parser |
 | `serde`, `serde_json`           | JSON-LD and ShExJ parsing + LSP protocol          | Spec-required, ubiquitous       | Write our own JSON parser         |
