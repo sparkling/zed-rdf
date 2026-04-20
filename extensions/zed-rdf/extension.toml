@@ -4,7 +4,7 @@ description = "Syntax highlighting and LSP support for RDF, SPARQL, ShEx, and Da
 version = "0.1.0"
 schema_version = 1
 authors = ["Henrik Pettersen <henrik@sparklingideas.co.uk>"]
-repository = "https://github.com/henrikp/zed-rdf"
+repository = "https://github.com/sparkling/zed-rdf"
 category = "Languages"
 
 [lib]
