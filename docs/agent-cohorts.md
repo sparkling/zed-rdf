@@ -156,6 +156,19 @@ and agent IDs differ.
 | `pc-tester` | `tester` | cohort-a | claude-opus-4-7 | Adversary fixture un-ignore + snapshots. |
 | `pc-reviewer` | `reviewer` | cohort-a | claude-opus-4-7 | ADR-0017 §7 gate review. |
 
+## Phase D agents (ADR-0023)
+
+**Audit window:** from `phase-d/start` to `phase-d/done`.
+
+### Phase D — Cohort A (`phase-d`)
+
+| Agent id | RuFlo role | Lineage | Base model | Notes |
+|----------|-----------|---------|-----------|-------|
+| `pd-shex-syntax` | `coder` | cohort-a | claude-opus-4-7 | ShEx compact syntax parser. |
+| `pd-datalog-syntax` | `coder` | cohort-a | claude-opus-4-7 | Datalog syntax parser. |
+| `pd-tester` | `tester` | cohort-a | claude-opus-4-7 | Integration + snapshot tests. |
+| `pd-reviewer` | `reviewer` | cohort-a | claude-opus-4-7 | ADR-0017 §7 gate review. |
+
 ## Audit log
 
 - 2026-04-19 — registry frozen during ADR-0020 pre-flight. Cohort A
@@ -168,3 +181,4 @@ and agent IDs differ.
   adversary agents. Total 15 — at ADR-0017 ceiling. — Orchestrator,
   session `session-1776711885748`.
 - 2026-04-20 — Phase C cohort rows appended. 3 cohort-A agents. sparql-syntax implementation pre-existing; Phase C work is test wiring + W3C conformance. — Orchestrator, session session-1776716816155.
+- 2026-04-20 — Phase D cohort rows appended. 4 cohort-A agents. — Orchestrator, session session-1776716816155.

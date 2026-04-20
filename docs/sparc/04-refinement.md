@@ -190,6 +190,14 @@ Phase C work: xtask/verify wiring (`manifest.rs` + `main.rs`), W3C integration t
 Exit gate met: sparql 149/149 W3C syntax entries pass, 0 divergences. 63 additional tests (adversary fixtures, snapshots, scope-checks) all green.
 Wall-clock: ~1 session. Tagged `phase-c/done`.
 
+## Phase D retro (2026-04-20)
+
+ADR-0023 executed as single-shot parallel swarm (4 agents, mesh topology).
+`shex-syntax`: hand-rolled recursive-descent ShEx 2.x compact syntax parser (AST + lexer + parser + encoder). 43 tests green. Key decisions: `@` disambiguation for shape refs vs lang tags, cardinality brace lookahead, undefined-prefix fatal error.
+`datalog-syntax`: hand-rolled Datalog parser (rules, facts, negation, comments, quoted constants). 18 tests green. Borrow-checker issue in encode.rs fixed during tester pass.
+Exit gate met: both fixture corpora green, `cargo test --workspace` clean, clippy clean.
+Wall-clock: ~1 session. Tagged `phase-d/done`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:

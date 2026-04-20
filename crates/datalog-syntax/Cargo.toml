@@ -1,0 +1,21 @@
+[package]
+name = "datalog-syntax"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Datalog syntax parser for the zed-rdf workspace (ADR-0017 §4 Phase D)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
+thiserror = { workspace = true }

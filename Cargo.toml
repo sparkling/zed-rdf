@@ -77,6 +77,10 @@ members = [
     # `pb-shadow-rdfxml` and `pb-shadow-jsonld` fill these independently.
     "crates/syntax/rdf-xml-shadow",
     "crates/syntax/rdf-jsonld-shadow",
+    # Phase D utility syntax parsers (ADR-0023 §1). Stubs land in pre-flight;
+    # agents `pd-shex-syntax` and `pd-datalog-syntax` fill the implementations.
+    "crates/datalog-syntax",
+    "crates/shex-syntax",
 ]
 
 [workspace.package]
