@@ -5,13 +5,13 @@ line_comments = ["# "]
 tab_size = 2
 hard_tabs = false
 
-[brackets]
+[[brackets]]
 start = "("
 end = ")"
 close_before = ""
 newline_between = false
 
-[brackets]
+[[brackets]]
 start = "["
 end = "]"
 close_before = ""

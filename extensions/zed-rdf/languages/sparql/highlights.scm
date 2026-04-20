@@ -1,58 +1,83 @@
-; SPARQL highlight queries
-; Grammar: tree-sitter-sparql (GordianDziwis)
+; SPARQL highlight queries.
+; Grammar: GordianDziwis/tree-sitter-sparql (commit 1ef52d3).
+;
+; Structural nodes are used in preference to string-literal keywords,
+; because the grammar accepts keywords case-insensitively and Zed only
+; highlights exact literal matches.
 
 ; Comments
 (comment) @comment
 
-; Keywords — query forms
-["SELECT" "CONSTRUCT" "ASK" "DESCRIBE"] @keyword
-["WHERE" "FROM" "NAMED"] @keyword
-["OPTIONAL" "UNION" "MINUS" "FILTER" "BIND" "VALUES" "SERVICE"] @keyword
-["GROUP" "BY" "HAVING" "ORDER" "LIMIT" "OFFSET"] @keyword
-["DISTINCT" "REDUCED" "AS" "IN" "NOT" "EXISTS"] @keyword
-["INSERT" "DELETE" "LOAD" "CLEAR" "DROP" "CREATE" "COPY" "MOVE" "ADD"] @keyword
-["WITH" "USING" "DEFAULT" "ALL" "SILENT"] @keyword
-["GRAPH" "BASE" "PREFIX"] @keyword
+; Prologue
+(base_declaration) @keyword
+(prefix_declaration) @keyword
 
-; Aggregate and built-in functions
-["COUNT" "SUM" "MIN" "MAX" "AVG" "SAMPLE" "GROUP_CONCAT"] @function.builtin
-["STR" "LANG" "DATATYPE" "IRI" "URI" "BNODE" "RAND" "ABS" "CEIL"] @function.builtin
-["FLOOR" "ROUND" "CONCAT" "STRLEN" "UCASE" "LCASE" "ENCODE_FOR_URI"] @function.builtin
-["CONTAINS" "STRSTARTS" "STRENDS" "STRBEFORE" "STRAFTER"] @function.builtin
-["YEAR" "MONTH" "DAY" "HOURS" "MINUTES" "SECONDS" "TIMEZONE" "TZ" "NOW"] @function.builtin
-["UUID" "STRUUID" "MD5" "SHA1" "SHA256" "SHA384" "SHA512"] @function.builtin
-["COALESCE" "IF" "STRLANG" "STRDT" "SAMETERM"] @function.builtin
-["ISIRI" "ISURI" "ISBLANK" "ISLITERAL" "ISNUMERIC"] @function.builtin
-["REGEX" "SUBSTR" "REPLACE" "SEPARATOR"] @function.builtin
+; Query forms
+(select_query) @function
+(construct_query) @function
+(describe_query) @function
+(ask_query) @function
+(sub_select) @function
+
+; Update operations
+(insert_data) @function
+(delete_data) @function
+(delete_where) @function
+(modify) @function
+(load) @function
+(clear) @function
+(drop) @function
+(create) @function
+(add) @function
+(move) @function
+(copy) @function
+
+; Graph patterns
+(optional_graph_pattern) @keyword
+(minus_graph_pattern) @keyword
+(filter) @keyword
+(bind) @keyword
+(values_clause) @keyword
+(service_graph_pattern) @keyword
+(graph_graph_pattern) @keyword
+(exists_func) @keyword
+(not_exists_func) @keyword
+
+; Solution modifiers
+(group_clause) @keyword
+(having_clause) @keyword
+(order_clause) @keyword
+(limit_clause) @keyword
+(offset_clause) @keyword
+
+; Functions
+(function_call) @function.call
+(build_in_function) @function.builtin
+(aggregate) @function.builtin
+(regex_expression) @function.builtin
+(substring_expression) @function.builtin
+(string_replace_expression) @function.builtin
 
 ; Variables
 (var) @variable
 
-; IRIs
+; Namespaces, IRIs, prefixed names
+(namespace) @namespace
 (iri_reference) @string.special
-(prefixed_name) @namespace
-(prefix_declaration prefix: (pname_ns) @namespace)
-
-; Literals
-(rdf_literal value: (string_literal_quote) @string)
-(string_literal_quote) @string
-(string_literal_long_quote) @string
-
-; Numeric literals
-(integer_literal) @number
-(decimal_literal) @number
-(double_literal) @number
-
-; Boolean
-(boolean_literal) @constant.builtin
+(prefixed_name) @type
 
 ; Blank nodes
-(blank_node_label) @constant.builtin
-(anon_blank_node) @constant.builtin
+(blank_node_label) @variable
+(anon) @variable
 
-; Operators
-["=" "!=" "<" ">" "<=" ">=" "+" "-" "*" "/" "!" "&&" "||"] @operator
-["|" "/" "^" "?" "+" "*"] @operator
+; Literals
+(string) @string
+(lang_tag) @string.special
+(boolean_literal) @boolean
+(integer) @number
+(decimal) @number
+(double) @number
+(nil) @constant
 
 ; Punctuation
 "." @punctuation.delimiter
@@ -64,4 +89,3 @@
 "}" @punctuation.bracket
 "[" @punctuation.bracket
 "]" @punctuation.bracket
-"^^" @operator

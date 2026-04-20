@@ -5,34 +5,39 @@ version = "0.1.0"
 schema_version = 1
 authors = ["Henrik Pettersen <henrik@sparklingideas.co.uk>"]
 repository = "https://github.com/sparkling/zed-rdf"
-category = "Languages"
-
-[lib]
-kind = "WebAssemblyExtension"
 
 [language_servers.rdf-lsp]
 name = "rdf-lsp"
-language = ["N-Triples", "N-Quads", "Turtle", "TriG", "RDF/XML", "JSON-LD", "TriX", "N3", "SPARQL", "ShEx", "Datalog"]
+languages = [
+    "N-Triples",
+    "N-Quads",
+    "Turtle",
+    "TriG",
+    "RDF/XML",
+    "JSON-LD",
+    "TriX",
+    "N3",
+    "SPARQL",
+    "ShEx",
+    "Datalog",
+]
 
-# Tree-sitter grammars. Only publicly-available grammars are listed;
-# ShEx, N3, Datalog, TriX, RDF/XML, and JSON-LD rely on LSP semantic
-# tokens (and Zed's built-in xml/json grammars where applicable) for
+# Tree-sitter grammars. ShEx, N3, Datalog, TriX, RDF/XML, and JSON-LD
+# have no dedicated grammar here — they rely on LSP semantic tokens
+# (and Zed's built-in xml/json grammars where applicable) for
 # highlighting.
 
-[[grammars]]
-name = "turtle"
+[grammars.turtle]
 repository = "https://github.com/GordianDziwis/tree-sitter-turtle"
 commit = "7f789ea7ef765080f71a298fc96b7c957fa24422"
 
-[[grammars]]
-name = "sparql"
+[grammars.sparql]
 repository = "https://github.com/GordianDziwis/tree-sitter-sparql"
 commit = "1ef52d35a73a2a5f2e433ecfd1c751c1360a923b"
 
-# N-Triples / N-Quads reuse the Turtle grammar — NT/NQ are syntactic
-# subsets of Turtle/TriG, and GordianDziwis/tree-sitter-turtle's node
+# N-Triples / N-Quads reuse the Turtle grammar — NT/NQ is a syntactic
+# subset of Turtle, and GordianDziwis/tree-sitter-turtle's node
 # vocabulary covers both forms cleanly.
-[[grammars]]
-name = "ntriples"
+[grammars.ntriples]
 repository = "https://github.com/GordianDziwis/tree-sitter-turtle"
 commit = "7f789ea7ef765080f71a298fc96b7c957fa24422"
