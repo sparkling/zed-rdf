@@ -169,6 +169,19 @@ and agent IDs differ.
 | `pd-tester` | `tester` | cohort-a | claude-opus-4-7 | Integration + snapshot tests. |
 | `pd-reviewer` | `reviewer` | cohort-a | claude-opus-4-7 | ADR-0017 §7 gate review. |
 
+## Phase E agents (ADR-0024)
+
+**Audit window:** from `phase-e/start` to `phase-e/done`.
+
+### Phase E — Cohort A (`phase-e`)
+
+| Agent id | RuFlo role | Lineage | Base model | Notes |
+|----------|-----------|---------|-----------|-------|
+| `pe-architect` | `architecture` | cohort-a | claude-opus-4-7 | Design vocab term model + formatter API. |
+| `pe-rdf-vocab` | `coder` | cohort-a | claude-opus-4-7 | Complete rdf-vocab with 11 vocabularies. |
+| `pe-formatters` | `coder` | cohort-a | claude-opus-4-7 | Turtle + N-Triples + N-Quads formatters. |
+| `pe-tester` | `tester` | cohort-a | claude-opus-4-7 | Snapshot + idempotency tests. |
+
 ## Audit log
 
 - 2026-04-19 — registry frozen during ADR-0020 pre-flight. Cohort A
@@ -182,3 +195,4 @@ and agent IDs differ.
   session `session-1776711885748`.
 - 2026-04-20 — Phase C cohort rows appended. 3 cohort-A agents. sparql-syntax implementation pre-existing; Phase C work is test wiring + W3C conformance. — Orchestrator, session session-1776716816155.
 - 2026-04-20 — Phase D cohort rows appended. 4 cohort-A agents. — Orchestrator, session session-1776716816155.
+- 2026-04-20 — Phase E cohort rows appended. 4 cohort-A agents. — Orchestrator, session session-1776716816155.

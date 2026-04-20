@@ -658,6 +658,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rdf-vocab"
+version = "0.0.0"
+dependencies = [
+ "rdf-iri",
+]
+
+[[package]]
 name = "rdf-xml"
 version = "0.0.0"
 dependencies = [

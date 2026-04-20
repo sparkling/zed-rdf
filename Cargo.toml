@@ -81,6 +81,9 @@ members = [
     # agents `pd-shex-syntax` and `pd-datalog-syntax` fill the implementations.
     "crates/datalog-syntax",
     "crates/shex-syntax",
+    # Phase E vocabulary crate (ADR-0024 §1). Stub lands in pre-flight;
+    # agent `pe-rdf-vocab` fills the 11 vocabulary modules.
+    "crates/rdf-vocab",
 ]
 
 [workspace.package]

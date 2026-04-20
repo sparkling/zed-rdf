@@ -198,6 +198,14 @@ ADR-0023 executed as single-shot parallel swarm (4 agents, mesh topology).
 Exit gate met: both fixture corpora green, `cargo test --workspace` clean, clippy clean.
 Wall-clock: ~1 session. Tagged `phase-d/done`.
 
+## Phase E retro (2026-04-20)
+
+ADR-0024 executed as hierarchical parallel swarm (4 agents: architect → 3 workers).
+`rdf-vocab`: 513 terms across 11 vocabularies (xsd 44, rdf 21, rdfs 15, owl 49, skos 34, sh/SHACL 74, dcterms 75, dcat 42, foaf 55, schema 46, prov 58); all ≥ 95% coverage. Plain `pub const &str` model with `/// Label:` doc-comments per arch memo.
+`rdf-format`: all 4 formatters already implemented from Phase B; added 32 idempotency property tests (full parse-back cycle) + 3 TurtleWriter snapshots.
+Exit gate met: hover-doc snapshots locked, formatter idempotency tests green. `cargo test --workspace` 0 failures.
+Wall-clock: ~1 session. Tagged `phase-e/done`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:

@@ -1,0 +1,18 @@
+[package]
+name = "rdf-vocab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "RDF vocabulary term definitions for the zed-rdf workspace (ADR-0017 §4 Phase E)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
