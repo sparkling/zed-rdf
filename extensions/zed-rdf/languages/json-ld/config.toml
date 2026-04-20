@@ -1,0 +1,5 @@
+name = "JSON-LD"
+grammar = "json"
+path_suffixes = ["jsonld", "json-ld"]
+tab_size = 2
+hard_tabs = false

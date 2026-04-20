@@ -1,0 +1,16 @@
+[package]
+name = "zed-rdf"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Zed editor extension for RDF/SPARQL/ShEx/Datalog."
+
+[lib]
+name = "zed_rdf"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Pinned per ADR-0027 §pre-flight: zed_extension_api 0.2.x is the last
+# stable version before the 0.3 workspace-symbol breaking change.
+zed_extension_api = "0.2"

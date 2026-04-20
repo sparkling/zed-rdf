@@ -1,0 +1,6 @@
+name = "N3"
+grammar = "turtle"
+path_suffixes = ["n3"]
+line_comments = ["# "]
+tab_size = 2
+hard_tabs = false

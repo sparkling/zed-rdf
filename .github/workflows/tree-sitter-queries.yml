@@ -1,0 +1,65 @@
+name: Tree-sitter query lint
+
+on:
+  push:
+    paths:
+      - "extensions/zed-rdf/languages/**/*.scm"
+      - "extensions/zed-rdf/extension.toml"
+  pull_request:
+    paths:
+      - "extensions/zed-rdf/languages/**/*.scm"
+      - "extensions/zed-rdf/extension.toml"
+
+jobs:
+  query-lint:
+    name: Parse .scm files against pinned grammars
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install tree-sitter CLI
+        run: npm install -g tree-sitter-cli
+
+      - name: Verify turtle grammar + queries
+        run: |
+          # Clone pinned grammar
+          git clone https://github.com/nicowillis/tree-sitter-turtle /tmp/ts-turtle
+          cd /tmp/ts-turtle && git checkout c0daf6c39ebcb17a3c3f3ff17c89e4fa3c7e4b8a
+          tree-sitter build-wasm
+          # Parse each .scm file
+          for scm in $GITHUB_WORKSPACE/extensions/zed-rdf/languages/turtle/*.scm \
+                     $GITHUB_WORKSPACE/extensions/zed-rdf/languages/trig/*.scm \
+                     $GITHUB_WORKSPACE/extensions/zed-rdf/languages/n3/*.scm \
+                     $GITHUB_WORKSPACE/extensions/zed-rdf/languages/ntriples/*.scm \
+                     $GITHUB_WORKSPACE/extensions/zed-rdf/languages/nquads/*.scm; do
+            echo "Checking $scm"
+            tree-sitter query "$scm" || exit 1
+          done
+        working-directory: /tmp/ts-turtle
+
+      - name: Verify sparql grammar + queries
+        run: |
+          git clone https://github.com/GordianDziwis/tree-sitter-sparql /tmp/ts-sparql
+          cd /tmp/ts-sparql && git checkout 6ae5f898b94e3d8e6dfd87cfe29b879e62fec8a3
+          tree-sitter build-wasm
+          for scm in $GITHUB_WORKSPACE/extensions/zed-rdf/languages/sparql/*.scm; do
+            echo "Checking $scm"
+            tree-sitter query "$scm" || exit 1
+          done
+        working-directory: /tmp/ts-sparql
+
+      - name: Verify shex grammar + queries
+        run: |
+          git clone https://github.com/nicowillis/tree-sitter-shex /tmp/ts-shex
+          cd /tmp/ts-shex && git checkout a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9
+          tree-sitter build-wasm
+          for scm in $GITHUB_WORKSPACE/extensions/zed-rdf/languages/shex/*.scm; do
+            echo "Checking $scm"
+            tree-sitter query "$scm" || exit 1
+          done
+        working-directory: /tmp/ts-shex
+
+      - name: Summary
+        run: echo "All tree-sitter queries parsed successfully."

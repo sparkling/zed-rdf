@@ -1,0 +1,6 @@
+name = "N-Quads"
+grammar = "ntriples"
+path_suffixes = ["nq"]
+line_comments = ["# "]
+tab_size = 2
+hard_tabs = false

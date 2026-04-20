@@ -1,0 +1,5 @@
+name = "TriX"
+grammar = "xml"
+path_suffixes = ["trix"]
+tab_size = 2
+hard_tabs = false

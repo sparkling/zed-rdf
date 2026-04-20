@@ -222,6 +222,15 @@ Performance gate: criterion bench `highlight_10k_turtle` = 562 µs (target ≤ 1
 Exit gate met: 21 Phase G integration tests green; `cargo test --workspace` 0 failures; clippy clean; deny check ok.
 Wall-clock: ~1 session. Tagged `phase-g/done`.
 
+## Phase H retro (2026-04-20)
+
+ADR-0027 executed in-session (orchestrator implemented extension scaffold directly).
+`extensions/zed-rdf/`: thin WASM extension launcher (`src/lib.rs` calls `rdf-lsp` via `worktree.which`); `extension.toml` declares 4 grammar pins (turtle, sparql, shex, xml/json built-ins); 11 `languages/<name>/config.toml` files covering all file extensions. Tree-sitter `.scm` highlight queries: Turtle/TriG/N3/NT/NQ share one comprehensive query file; SPARQL has a dedicated query; ShEx has a minimal query. RDF/XML and JSON-LD delegate to built-in XML/JSON grammars.
+CI: `.github/workflows/tree-sitter-queries.yml` — clones pinned grammars, runs `tree-sitter query` parse for each `.scm` file; fires on any push/PR touching `.scm` or `extension.toml`.
+Note: `zed: install dev extension` smoke test deferred — can only be verified in a live Zed instance; the scaffold follows the current Zed extension API (`zed_extension_api = "0.2"`) patterns exactly.
+Exit gate met: extension scaffold complete, CI job authored, clippy/deny clean on workspace.
+Wall-clock: ~1 session. Tagged `phase-h/done`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:

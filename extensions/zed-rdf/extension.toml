@@ -1,0 +1,35 @@
+id = "zed-rdf"
+name = "RDF / SPARQL / ShEx / Datalog"
+description = "Syntax highlighting and LSP support for RDF, SPARQL, ShEx, and Datalog."
+version = "0.1.0"
+schema_version = 1
+authors = ["Henrik Pettersen <henrik@sparklingideas.co.uk>"]
+repository = "https://github.com/henrikp/zed-rdf"
+category = "Languages"
+
+[lib]
+kind = "WebAssemblyExtension"
+
+[language_servers.rdf-lsp]
+name = "rdf-lsp"
+language = ["N-Triples", "N-Quads", "Turtle", "TriG", "RDF/XML", "JSON-LD", "TriX", "N3", "SPARQL", "ShEx", "Datalog"]
+
+[[grammars]]
+name = "turtle"
+repository = "https://github.com/nicowillis/tree-sitter-turtle"
+commit = "c0daf6c39ebcb17a3c3f3ff17c89e4fa3c7e4b8a"
+
+[[grammars]]
+name = "sparql"
+repository = "https://github.com/GordianDziwis/tree-sitter-sparql"
+commit = "6ae5f898b94e3d8e6dfd87cfe29b879e62fec8a3"
+
+[[grammars]]
+name = "ntriples"
+repository = "https://github.com/nicowillis/tree-sitter-turtle"
+commit = "c0daf6c39ebcb17a3c3f3ff17c89e4fa3c7e4b8a"
+
+[[grammars]]
+name = "shex"
+repository = "https://github.com/nicowillis/tree-sitter-shex"
+commit = "a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9"

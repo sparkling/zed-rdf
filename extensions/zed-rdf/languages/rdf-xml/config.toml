@@ -1,0 +1,5 @@
+name = "RDF/XML"
+grammar = "xml"
+path_suffixes = ["rdf"]
+tab_size = 2
+hard_tabs = false
