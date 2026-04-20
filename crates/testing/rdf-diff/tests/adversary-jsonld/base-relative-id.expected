@@ -1,0 +1,14 @@
+# Adversary fixture: FM1 — @base with relative @id
+# Failure mode: implementations that ignore @base in context, or that only
+#   apply @base to properties but not to the node @id, will produce an
+#   incorrect absolute IRI or reject the document.
+# JSON-LD 1.1 §6.1 (IRI expansion): a relative IRI in @id is resolved
+#   against the in-scope base IRI established by @base in the active context.
+# Expected: one triple with subject http://example.org/base/doc
+# spec-ref: W3C JSON-LD 1.1 §4.1.2, §6.1 IRI Expansion algorithm step 7
+# divergence-hypothesis: AcceptRejectSplit — parsers that skip @base resolution
+#   on node @id emit the relative IRI or reject; conformant parsers resolve.
+outcome: accept
+fact-count: 1
+ACCEPT
+<http://example.org/base/doc> <http://schema.org/name> "Test Document" .

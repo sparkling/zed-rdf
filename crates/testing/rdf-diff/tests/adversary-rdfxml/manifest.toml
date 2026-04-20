@@ -1,0 +1,45 @@
+# Adversary fixture manifest for RDF/XML parser — Phase B cohort-B
+#
+# Each fixture exercises a distinct failure mode in RDF/XML parsing.
+# See the inline comments in each .rdf file for the divergence hypothesis,
+# spec reference, and expected outcome rationale.
+#
+# Outcome semantics:
+#   ACCEPT — parser must produce the triples listed in the .expected file
+#   REJECT — parser must reject the input (structural violation)
+
+[[fixture]]
+path = "xmllang-inherit.rdf"
+expected = "xmllang-inherit.expected"
+format = "rdfxml"
+# FM: xml:lang on outer rdf:Description inherited by inner plain literals.
+# Divergence: parsers not propagating xml:lang through the element tree
+# produce un-tagged literals instead of lang-tagged ones.
+# Spec: RDF/XML §2.5 (xml:lang propagation)
+
+[[fixture]]
+path = "relative-iri-base.rdf"
+expected = "relative-iri-base.expected"
+format = "rdfxml"
+# FM: relative IRIs in rdf:about / rdf:resource resolved against xml:base.
+# Divergence: parsers ignoring xml:base keep raw relative IRIs in the
+# fact set; parsers with no base context must reject.
+# Spec: RDF/XML §2.14–§2.15, RFC 3986 §5
+
+[[fixture]]
+path = "rdf-id-reification.rdf"
+expected = "rdf-id-reification.expected"
+format = "rdfxml"
+# FM: rdf:ID on a property element triggers reification (5 triples total).
+# Divergence: parsers that only handle rdf:ID on node elements omit the
+# four rdf:Statement reification triples.
+# Spec: RDF/XML §2.17 (reification via rdf:ID on property elements)
+
+[[fixture]]
+path = "parsetype-literal.rdf"
+expected = "parsetype-literal.expected"
+format = "rdfxml"
+# FM: rdf:parseType="Literal" — inner XML content becomes an rdf:XMLLiteral.
+# Divergence: parsers that lack parseType="Literal" support either reject
+# the document or incorrectly parse the XML content as nested RDF nodes.
+# Spec: RDF/XML §2.9, production parseTypeLiteralPropertyElt

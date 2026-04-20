@@ -1,0 +1,35 @@
+# Adversary fixture: FM3-N3 — `=>` (log:implies) emits a triple with log:implies as predicate
+#
+# Hypothesis: The `=>` operator in N3 is syntactic sugar for the predicate
+# `log:implies` (<http://www.w3.org/2000/10/swap/log#implies>). The statement
+#
+#   { :s :p :o } => { :s :q :r } .
+#
+# must produce exactly one triple whose predicate is
+# `<http://www.w3.org/2000/10/swap/log#implies>`, with the two quoted
+# formulas as subject and object respectively. A parser that:
+#   (a) evaluates the implication rather than emitting the triple, or
+#   (b) uses a different predicate URI for `=>`, or
+#   (c) emits both inner triples into the default graph (treating `{}` as
+#       a TriG-like named graph and flattening), or
+#   (d) rejects `=>` entirely as unsupported syntax,
+# will diverge against a conformant N3 parser.
+#
+# Expected: parse succeeds; exactly 1 triple in the default (ambient) graph,
+# with predicate `log:implies`. The subject and object are quoted formulas
+# (opaque values from the default-graph perspective).
+#
+# N3 spec §6: `expr1 => expr2` is shorthand for
+#   `expr1 log:implies expr2 .`
+# N3 spec §4: Each `{ ... }` is a formula node (cited graph).
+#
+# Divergence signal: AcceptRejectSplit (parser rejects `=>`), or
+# PredicateMismatch (wrong predicate IRI emitted), or ExtraFactIn (inner
+# triples leaked to default graph).
+#
+# Spec: W3C N3 Team Submission 2011-03-28 §6 — Implication; §4 — Formulae.
+
+@prefix :    <http://example.org/> .
+@prefix log: <http://www.w3.org/2000/10/swap/log#> .
+
+{ :s :p :o } => { :s :q :r } .

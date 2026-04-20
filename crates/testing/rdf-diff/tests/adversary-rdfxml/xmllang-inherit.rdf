@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Adversary fixture: xml:lang inheritance
+
+  RDF/XML spec §2.5 (xml:lang): an xml:lang attribute on an enclosing
+  rdf:Description element is inherited by all plain literal property
+  elements within that element's scope, unless overridden by a closer
+  xml:lang declaration.
+
+  This fixture places xml:lang="fr" on the outer rdf:Description and
+  tests that:
+    1. The inner rdf:label literal inherits lang "fr" (no override).
+    2. The inner rdf:comment literal overrides to lang "en".
+    3. The lang-overriding literal uses "en", not "fr".
+
+  Divergence hypothesis: parsers that do not propagate xml:lang through
+  the element tree will produce plain literals without a language tag,
+  causing a FactOnlyIn divergence against oracles that respect XML
+  attribute inheritance.
+
+  Spec-ref: https://www.w3.org/TR/rdf-syntax-grammar/#section-Syntax-languages
+  Production: parseTypeCollectionPropertyElt / literalPropertyElt,
+              xml:lang propagation rule in RDF/XML §2.5.
+-->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:dc="http://purl.org/dc/elements/1.1/"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+  <rdf:Description rdf:about="http://example.org/doc/1" xml:lang="fr">
+    <dc:title>Bonjour le monde</dc:title>
+    <dc:description xml:lang="en">Hello world</dc:description>
+  </rdf:Description>
+</rdf:RDF>

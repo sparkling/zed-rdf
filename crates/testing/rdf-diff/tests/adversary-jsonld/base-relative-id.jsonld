@@ -1,0 +1,8 @@
+{
+  "@context": {
+    "@base": "http://example.org/base/",
+    "name": "http://schema.org/name"
+  },
+  "@id": "doc",
+  "name": "Test Document"
+}

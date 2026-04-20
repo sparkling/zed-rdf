@@ -1,7 +1,7 @@
 # ADR-0021: Phase B execution plan — remaining RDF syntax via single-shot parallel swarm
 
-- **Status:** Proposed
-- **Date:** 2026-04-19
+- **Status:** Accepted
+- **Date:** 2026-04-20
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
 - **Instantiates:** [ADR-0017](0017-execution-model.md) (execution

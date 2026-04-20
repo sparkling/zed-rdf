@@ -16,6 +16,16 @@ path = "src/lib.rs"
 # See ADR-0019 §3 and ADR-0020 §1.
 default = []
 shadow = []
+# Phase B oracle features: gate tests that diff the main parsers against
+# the oxrdfxml / oxjsonld reference adapters. The upstream crates land as
+# dev-dependencies only (ADR-0019 §1 carve-out).
+oracle-oxrdfxml = []
+oracle-oxjsonld = []
+# Phase B shadow features: gate tests that three-way diff main vs shadow
+# vs oracle. Shadows are stub-only in Phase B; tests are #[ignore]-gated
+# until pb-shadow-rdfxml / pb-shadow-jsonld agents fill them in.
+shadow-xml = []
+shadow-jsonld = []
 
 [lints]
 workspace = true
@@ -39,3 +49,17 @@ rdf-iri-shadow = { path = "../../syntax/rdf-iri-shadow", version = "0.0.0", feat
 rdf-ntriples-shadow = { path = "../../syntax/rdf-ntriples-shadow", version = "0.0.0", features = ["shadow"] }
 rdf-turtle-shadow = { path = "../../syntax/rdf-turtle-shadow", version = "0.0.0", features = ["shadow"] }
 sparql-syntax-shadow = { path = "../../syntax/sparql-syntax-shadow", version = "0.0.0", features = ["shadow"] }
+# Phase B main parsers (all now compile and implemented).
+rdf-jsonld = { path = "../../rdf-jsonld", version = "0.0.0" }
+rdf-xml = { path = "../../rdf-xml", version = "0.0.0" }
+# Phase B shadow parsers (all now compile and implemented).
+rdf-jsonld-shadow = { path = "../../syntax/rdf-jsonld-shadow", version = "0.0.0", features = ["shadow"] }
+rdf-xml-shadow = { path = "../../syntax/rdf-xml-shadow", version = "0.0.0", features = ["shadow"] }
+# Oracle adapters for Phase B: oxrdfxml and oxjsonld are always present as
+# dev-dependencies (they are test-only by definition) but their usage in
+# test bodies is gated behind the oracle-oxrdfxml / oracle-oxjsonld features
+# (ADR-0019 §1 carve-out). The feature flags control which test bodies
+# compile; the crates themselves are always in the dev graph.
+oxrdf = "0.3"
+oxrdfxml = "0.2"
+oxjsonld = "0.2"

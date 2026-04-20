@@ -51,8 +51,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rdf_diff::{Facts, ParseOutcome, Parser as DiffParser};
+use rdf_jsonld::JsonLdParser;
 use rdf_ntriples::{NQuadsParser, NTriplesParser};
 use rdf_turtle::{TriGParser, TurtleParser};
+use rdf_xml::RdfXmlParser;
 
 /// Kind of test declared by the W3C manifest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -477,6 +479,16 @@ fn parse_for_language(
             .map_err(|d| format_diag(&d.messages)),
         "nq" => NQuadsParser
             .parse(input)
+            .map_err(|d| format_diag(&d.messages)),
+        "rdfxml" => {
+            let p = RdfXmlParser::new();
+            base.map_or_else(|| p.parse(input), |b| p.parse_with_base(input, b))
+                .map_err(|d| format_diag(&d.messages))
+        }
+        "jsonld" => base
+            .map_or_else(|| JsonLdParser::new().parse(input), |b| {
+                JsonLdParser::with_base(b).parse(input)
+            })
             .map_err(|d| format_diag(&d.messages)),
         other => Err(format!("no main parser registered for language `{other}`")),
     }

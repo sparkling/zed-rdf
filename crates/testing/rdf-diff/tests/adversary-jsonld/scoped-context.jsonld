@@ -1,0 +1,23 @@
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "name": "http://schema.org/name",
+    "Person": {
+      "@id": "http://schema.org/Person",
+      "@context": {
+        "name": "http://xmlns.com/foaf/0.1/name"
+      }
+    }
+  },
+  "@graph": [
+    {
+      "@id": "ex:doc",
+      "name": "Document Name"
+    },
+    {
+      "@id": "ex:alice",
+      "@type": "Person",
+      "name": "Alice"
+    }
+  ]
+}

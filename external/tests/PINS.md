@@ -16,6 +16,31 @@ deliberate `git subtree pull` (or repeat-`add`) with a new SHA.
 | Local prefix       | `external/tests/w3c-rdf-tests/`                                  |
 | License            | W3C Test Suite dual licence (BSD-3-Clause or W3C Software Licence and Document Licence) — see `w3c-rdf-tests/LICENSE.md` and <https://www.w3.org/Consortium/Legal/2008/04-testsuite-copyright.html> |
 
+## w3c/json-ld-api
+
+| Field              | Value                                                                          |
+| ------------------ | ------------------------------------------------------------------------------ |
+| Repository         | <https://github.com/w3c/json-ld-api>                                           |
+| Pinned branch head | `main` (as of 2026-04-20)                                                      |
+| Vendored on        | 2026-04-20                                                                     |
+| Vendored by        | `git subtree add --prefix=external/tests/w3c-jsonld-api --squash`              |
+| Local prefix       | `external/tests/w3c-jsonld-api/`                                               |
+| Relevant sub-path  | `tests/toRdf/` — `toRdf-manifest.jsonld` covers JSON-LD → RDF conversion       |
+| License            | W3C Software and Document License — see `w3c-jsonld-api/LICENSE.md`            |
+| Phase B scope      | `toRdf` tests only; expand/compact/normalize are Phase E (ADR-0021 §Context)   |
+
+### Refresh procedure
+
+```bash
+# from repo root, on a branch dedicated to the pin bump
+git subtree pull --prefix=external/tests/w3c-jsonld-api \
+    https://github.com/w3c/json-ld-api.git <new-sha> --squash
+```
+
+---
+
+## w3c/rdf-tests
+
 ### Refresh procedure
 
 ```bash

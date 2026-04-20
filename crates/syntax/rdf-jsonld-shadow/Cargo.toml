@@ -1,0 +1,24 @@
+[package]
+name = "rdf-jsonld-shadow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Independent shadow JSON-LD syntax parser for Phase B diff-harness verification (ADR-0021, pb-shadow-jsonld)."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+shadow = []
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../../testing/rdf-diff", version = "0.0.0" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

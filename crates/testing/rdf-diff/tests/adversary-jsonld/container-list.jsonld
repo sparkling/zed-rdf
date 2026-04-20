@@ -1,0 +1,12 @@
+{
+  "@context": {
+    "ex": "http://example.org/",
+    "items": {
+      "@id": "http://example.org/items",
+      "@container": "@list",
+      "@type": "@id"
+    }
+  },
+  "@id": "ex:subject",
+  "items": ["ex:first", "ex:second"]
+}

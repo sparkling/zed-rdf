@@ -1,0 +1,3 @@
+ACCEPT
+<http://example.org/base/subject> <http://example.org/vocab#related> <http://example.org/base/object> .
+<http://example.org/base/subject> <http://example.org/vocab#label> "A relative-IRI document" .

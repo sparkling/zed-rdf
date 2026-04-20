@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adversary fixture: FM1 — wrong TriX namespace URI
+     Hypothesis: a parser that validates the namespace URI will reject this
+     document because the TriX namespace is misspelled. The canonical TriX
+     namespace is "http://www.w3.org/2004/03/trix/trix-1/" (note the
+     trailing slash); this document uses "http://www.w3.org/2004/03/trix/trix-1"
+     (without trailing slash) which is a different URI and must be rejected.
+     Expected outcome: reject
+     Spec-ref: TriX spec §2 — "The document element must be <TriX> in the
+       namespace http://www.w3.org/2004/03/trix/trix-1/"
+-->
+<TriX xmlns="http://www.w3.org/2004/03/trix/trix-1">
+  <graph>
+    <uri>http://example.org/graph1</uri>
+    <triple>
+      <uri>http://example.org/subject</uri>
+      <uri>http://example.org/predicate</uri>
+      <uri>http://example.org/object</uri>
+    </triple>
+  </graph>
+</TriX>

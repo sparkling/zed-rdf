@@ -113,6 +113,37 @@ A follow-up sweep gets a new registry (`docs/agent-cohorts/vN.md` or a
 successor ADR), not an edit of this one. See ADR-0020 Consequences
 (Neutral).
 
+## Phase B agents (ADR-0021)
+
+**Audit window:** from `phase-b/start` to `phase-b/done`. Rules
+are identical to the verification-v1 block above; only the namespaces
+and agent IDs differ.
+
+### Phase B — Cohort A (`phase-b`)
+
+| Agent id                 | RuFlo role   | Lineage  | Base model        | Notes                                                       |
+|--------------------------|--------------|----------|-------------------|-------------------------------------------------------------|
+| `pb-rdf-xml`             | `coder`      | cohort-a | claude-opus-4-7   | Main RDF/XML parser.                                        |
+| `pb-rdf-jsonld`          | `coder`      | cohort-a | claude-opus-4-7   | Main JSON-LD syntax parser.                                 |
+| `pb-rdf-trix`            | `coder`      | cohort-a | claude-opus-4-7   | Main TriX parser.                                           |
+| `pb-rdf-n3`              | `coder`      | cohort-a | claude-opus-4-7   | Main N3 parser.                                             |
+| `pb-rdf-xml-main-tester` | `tester`     | cohort-a | claude-opus-4-7   | W3C rdfxml manifest tests.                                  |
+| `pb-tester`              | `tester`     | cohort-a | claude-opus-4-7   | Cross-format adversary + snapshot wiring.                   |
+| `pb-reviewer`            | `reviewer`   | cohort-a | claude-opus-4-7   | ADR-0017 §7 gates; audit at `.claude-flow/audit/phase-b-reviews/`. |
+| `pb-shadow-rdfxml`       | `coder`      | cohort-a | claude-sonnet-4-6 | **Model override** for RDF/XML shadow independence.         |
+| `pb-shadow-jsonld`       | `coder`      | cohort-a | claude-sonnet-4-6 | **Model override** for JSON-LD shadow independence.         |
+
+### Phase B — Cohort B (`phase-b-adv`)
+
+| Agent id        | RuFlo role      | Lineage  | Base model        | Notes                                           |
+|-----------------|-----------------|----------|-------------------|-------------------------------------------------|
+| `pb-adv-redteam`| `reviewer`      | cohort-b | claude-sonnet-4-6 | Red-team briefs; 3–10 failure modes per format. |
+| `pb-adv-rdfxml` | `tester`        | cohort-b | claude-sonnet-4-6 | Adversary fixture corpus for rdfxml.            |
+| `pb-adv-jsonld` | `tester`        | cohort-b | claude-sonnet-4-6 | Adversary fixture corpus for jsonld.            |
+| `pb-adv-trix`   | `tester`        | cohort-b | claude-sonnet-4-6 | Adversary fixture corpus for trix.              |
+| `pb-adv-n3`     | `tester`        | cohort-b | claude-sonnet-4-6 | Adversary fixture corpus for n3.                |
+| `pb-adv-veto`   | `code-analyzer` | cohort-b | claude-sonnet-4-6 | Veto register; audit at `.claude-flow/audit/adversary-veto/register.md`. |
+
 ## Audit log
 
 - 2026-04-19 — registry frozen during ADR-0020 pre-flight. Cohort A
@@ -120,3 +151,7 @@ successor ADR), not an edit of this one. See ADR-0020 Consequences
   shadow-parser agents overridden to `claude-sonnet-4-6` for base-model
   disjointness per ADR-0019 §3. — Orchestrator, session
   `session-1776556770073`.
+- 2026-04-20 — Phase B cohort rows appended during ADR-0021 pre-flight.
+  9 cohort-A agents (2 with sonnet-4-6 model override) + 6 cohort-B
+  adversary agents. Total 15 — at ADR-0017 ceiling. — Orchestrator,
+  session `session-1776711885748`.

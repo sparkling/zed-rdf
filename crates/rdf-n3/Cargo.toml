@@ -1,0 +1,25 @@
+[package]
+name = "rdf-n3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "Main N3 (Notation3) parser for the zed-rdf workspace (ADR-0021 Phase B, pb-rdf-n3)."
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"

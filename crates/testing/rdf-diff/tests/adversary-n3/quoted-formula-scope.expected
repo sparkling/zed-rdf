@@ -1,0 +1,10 @@
+# Adversary fixture: FM2-N3 — Quoted formula { } triples are graph-scoped, not asserted
+# Hypothesis: Triples inside a quoted formula `{ }` must NOT be emitted into the
+#   default graph. A parser that flattens the formula emits 4 facts (1 outer +
+#   3 inner) instead of 1; a conformant parser emits exactly 1 fact in the
+#   default graph.
+# Expected outcome: accept-with-1-fact
+outcome: accept
+fact-count: 1
+divergence-hypothesis: ExtraFactIn — flattening parsers emit inner formula triples to the default graph, yielding 4 facts instead of 1
+spec-ref: W3C N3 Team Submission 2011-03-28 §4 — Formulae (quoted graph scoping)

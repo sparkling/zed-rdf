@@ -1,0 +1,36 @@
+# Adversary N3 fixture manifest
+#
+# Owner : pb-adv-n3 (cohort B, adversary hive, Phase B)
+# ADR   : ADR-0019 §4 — adversary-corpus responsibilities
+#
+# Each entry names a fixture stem, its expected outcome, and the divergence
+# hypothesis. The `xtask verify --adversary-n3` runner reads this manifest to
+# drive the fixture loop; companion `.expected` side-cars carry the full
+# per-fixture annotation.
+
+format = "n3"
+spec   = "https://www.w3.org/TeamSubmission/n3/"
+
+[[fixture]]
+stem              = "keywords-a-shorthand"
+finding           = "FM1-N3"
+outcome           = "accept"
+fact-count        = 2
+divergence-class  = "PredicateMismatch"
+hypothesis        = "@keywords a. activates bare `a` as rdf:type; parsers that ignore the directive emit a local-name predicate instead"
+
+[[fixture]]
+stem              = "quoted-formula-scope"
+finding           = "FM2-N3"
+outcome           = "accept"
+fact-count        = 1
+divergence-class  = "ExtraFactIn"
+hypothesis        = "Triples inside a quoted formula { } are graph-scoped and must not be emitted to the default graph; flattening parsers produce 4 facts instead of 1"
+
+[[fixture]]
+stem              = "implies-triple"
+finding           = "FM3-N3"
+outcome           = "accept"
+fact-count        = 1
+divergence-class  = "PredicateMismatch"
+hypothesis        = "{ :s :p :o } => { :s :q :r } emits one triple with log:implies as predicate; parsers that evaluate the rule or use a different predicate IRI diverge"

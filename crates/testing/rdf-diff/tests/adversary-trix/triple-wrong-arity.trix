@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adversary fixture: FM3 — <triple> element with wrong arity (4 children)
+     Hypothesis: the TriX spec requires exactly 3 children for a <triple> element
+     (subject, predicate, object). This document has a <triple> with 4 children,
+     which is a structural violation. A conformant parser must reject the document.
+     A lenient parser may silently ignore the extra child or accept the first 3,
+     producing an AcceptRejectSplit against a strict parser.
+     Expected outcome: reject
+     Spec-ref: TriX spec §3 — "A triple element has exactly three children"
+-->
+<TriX xmlns="http://www.w3.org/2004/03/trix/trix-1/">
+  <graph>
+    <uri>http://example.org/graph1</uri>
+    <triple>
+      <uri>http://example.org/subject</uri>
+      <uri>http://example.org/predicate</uri>
+      <uri>http://example.org/object</uri>
+      <uri>http://example.org/extra-fourth-child</uri>
+    </triple>
+  </graph>
+</TriX>

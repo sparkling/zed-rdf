@@ -1,0 +1,51 @@
+# Adversary TriX fixture manifest
+#
+# Owner:    pb-adv-trix (cohort B, adversary hive, Phase B)
+# ADR refs: ADR-0019 §4 (adversary corpus), ADR-0020 §6.5 (cohort-B paths)
+# Spec:     TriX — Triples in XML (HPL-2004-56, Carroll & Klyne, 2004)
+#           https://www.hpl.hp.com/techreports/2004/HPL-2004-56.html
+#
+# Each entry names the input file (.trix), its companion sidecar (.expected),
+# the failure mode exercised, the predicted outcome, and whether the outcome
+# is deterministic (reject/accept) or implementation-defined.
+#
+# outcome values:
+#   "reject"                 — every conformant parser must reject
+#   "accept"                 — every conformant parser must accept
+#   "implementation-defined" — the spec is silent; outcome depends on the
+#                              parser's chosen interpretation; divergence is
+#                              informational, not a hard CI failure
+
+format = "trix"
+cohort  = "B"
+agent   = "pb-adv-trix"
+
+[[fixture]]
+stem     = "wrong-namespace"
+input    = "wrong-namespace.trix"
+sidecar  = "wrong-namespace.expected"
+failure_mode = "FM1"
+description  = "TriX document with incorrect namespace URI (missing trailing slash)"
+outcome      = "reject"
+deterministic = true
+spec_ref = "TriX spec §2 — document element namespace must be http://www.w3.org/2004/03/trix/trix-1/"
+
+[[fixture]]
+stem     = "bnode-as-graph"
+input    = "bnode-as-graph.trix"
+sidecar  = "bnode-as-graph.expected"
+failure_mode = "FM2"
+description  = "<bnode> element used in the graph-name position instead of <uri>"
+outcome      = "implementation-defined"
+deterministic = false
+spec_ref = "TriX spec §3 — graph name must be <uri>; <bnode> in that slot is outside the spec"
+
+[[fixture]]
+stem     = "triple-wrong-arity"
+input    = "triple-wrong-arity.trix"
+sidecar  = "triple-wrong-arity.expected"
+failure_mode = "FM3"
+description  = "<triple> element with 4 children instead of the required 3"
+outcome      = "reject"
+deterministic = true
+spec_ref = "TriX spec §3 — a triple element has exactly three children (subject, predicate, object)"

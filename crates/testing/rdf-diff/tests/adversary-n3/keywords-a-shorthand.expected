@@ -1,0 +1,9 @@
+# Adversary fixture: FM1-N3 — @keywords a. followed by bare `a` as type shorthand
+# Hypothesis: `@keywords a.` activates bare `a` as rdf:type. A parser ignoring
+#   the directive or treating bare `a` as a local name will diverge.
+# Expected outcome: accept-with-2-facts
+outcome: accept
+fact-count: 2
+predicate-value: <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> (for both triples)
+divergence-hypothesis: AcceptRejectSplit or PredicateMismatch — parsers that ignore @keywords emit a local-name predicate instead of rdf:type
+spec-ref: W3C N3 Team Submission 2011-03-28 §3.1 — @keywords directive

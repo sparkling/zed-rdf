@@ -66,6 +66,17 @@ members = [
     # Phase-A parsers (ADR-0017 Phase A, `pa-rdf-format`). Output matches
     # the canonical form defined by `rdf_diff::Facts::canonicalise`.
     "crates/rdf-format",
+    # Phase B main parsers (ADR-0021 §3). Stubs land in pre-flight;
+    # agents `pb-rdf-xml`, `pb-rdf-jsonld`, `pb-rdf-trix`, `pb-rdf-n3`
+    # fill the implementations.
+    "crates/rdf-xml",
+    "crates/rdf-jsonld",
+    "crates/rdf-trix",
+    "crates/rdf-n3",
+    # Phase B shadow parsers (ADR-0021 §4, ADR-0019 §3). Agents
+    # `pb-shadow-rdfxml` and `pb-shadow-jsonld` fill these independently.
+    "crates/syntax/rdf-xml-shadow",
+    "crates/syntax/rdf-jsonld-shadow",
 ]
 
 [workspace.package]
@@ -105,3 +116,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # on so the precomputed Unicode tables ship with the crate — otherwise
 # we'd need to vendor them ourselves, defeating the carve-out.
 idna = "1"
+# ADR-0021 Phase B infrastructure deps. `quick-xml` is the streaming
+# XML tokeniser for `rdf-xml` and `rdf-trix`. `serde_json` is the JSON
+# parser for `rdf-jsonld`. Both are runtime deps with no oracle-crate
+# status (they are not reference parsers per ADR-0019 §1).
+quick-xml = "0.37"
+serde_json = "1"

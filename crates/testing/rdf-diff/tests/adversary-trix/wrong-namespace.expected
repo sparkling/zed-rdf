@@ -1,0 +1,14 @@
+# Adversary fixture: FM1 — wrong TriX namespace URI
+# Hypothesis: a parser that validates the xmlns declaration will reject this
+#   document because "http://www.w3.org/2004/03/trix/trix-1" (no trailing
+#   slash) is not the canonical TriX namespace
+#   "http://www.w3.org/2004/03/trix/trix-1/". The two URIs are distinct;
+#   the document is not a valid TriX document.
+# Expected outcome: reject
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — namespace-oblivious XML parsers that
+  do not validate the xmlns value against the canonical TriX namespace will
+  accept the document and produce 1 fact; conformant parsers reject it.
+spec-ref: TriX spec §2 (HPL-2004-56) — document element must be <TriX> in
+  namespace http://www.w3.org/2004/03/trix/trix-1/ (with trailing slash)

@@ -1,0 +1,51 @@
+# Adversary JSON-LD fixture manifest
+#
+# Agent: pb-adv-jsonld (cohort B, adversary hive, phase-b sweep)
+# ADR references: ADR-0019 §4, ADR-0021 §5
+#
+# Each fixture targets a distinct failure mode in JSON-LD 1.1 to RDF
+# conversion. Companion .expected files carry both the structured
+# outcome/fact-count metadata (for the xtask verify runner) and the
+# canonical N-Quads lines (ACCEPT\n<nquads> or REJECT\n).
+#
+# Failure modes covered:
+#   FM1 — @base in context with relative @id: IRI must be resolved
+#   FM2 — @type: @id coerces string value to IRI, not plain literal
+#   FM3 — @container: @list must produce rdf:first/rdf:rest chain
+#   FM4 — type-scoped @context redefines term for that node only
+
+[[fixture]]
+path = "base-relative-id.jsonld"
+expected = "base-relative-id.expected"
+format = "jsonld"
+failure-mode = "FM1"
+description = "@base in context with relative @id — IRI must be resolved against base"
+spec-ref = "W3C JSON-LD 1.1 §4.1.2, §6.1"
+divergence-hypothesis = "AcceptRejectSplit — parsers that skip @base on node @id"
+
+[[fixture]]
+path = "type-coercion.jsonld"
+expected = "type-coercion.expected"
+format = "jsonld"
+failure-mode = "FM2"
+description = "@type: @id coerces string value to IRI, not plain literal"
+spec-ref = "W3C JSON-LD 1.1 §5.3.2"
+divergence-hypothesis = "ObjectMismatch — lax parsers produce literal instead of IRI"
+
+[[fixture]]
+path = "container-list.jsonld"
+expected = "container-list.expected"
+format = "jsonld"
+failure-mode = "FM3"
+description = "@container: @list must produce rdf:first/rdf:rest cons-cell chain"
+spec-ref = "W3C JSON-LD 1.1 §8.2.2"
+divergence-hypothesis = "FactCountMismatch — naive parsers emit N direct triples instead of list chain"
+
+[[fixture]]
+path = "scoped-context.jsonld"
+expected = "scoped-context.expected"
+format = "jsonld"
+failure-mode = "FM4"
+description = "type-scoped @context in node object redefines term for that node only"
+spec-ref = "W3C JSON-LD 1.1 §4.1.2 Type-scoped Contexts"
+divergence-hypothesis = "ObjectMismatch — parsers ignoring scoped context use outer mapping for all nodes"

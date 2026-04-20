@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Adversary fixture: rdf:ID on a property element (reification)
+
+  RDF/XML spec §2.4 (Typed Nodes) and §2.17 (reification):
+  When rdf:ID appears as an attribute on a *property element* (not a
+  node element), it causes the parser to emit four additional reification
+  triples in addition to the primary triple:
+
+    rdf:type        rdf:Statement
+    rdf:subject     <the subject>
+    rdf:predicate   <the property>
+    rdf:object      <the object>
+
+  The reification node IRI is formed by resolving "#" + the ID value
+  against the in-scope base URI.
+
+  Divergence hypothesis: parsers that treat rdf:ID on a property element
+  identically to rdf:ID on a node element (i.e., as a subject identifier
+  only) will not emit the four reification triples, producing a
+  FactOnlyIn divergence against oracles.
+
+  Spec-ref: https://www.w3.org/TR/rdf-syntax-grammar/#section-Syntax-reifying
+  Production: propertyEltList, idAttr on propertyElt
+-->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/vocab#"
+         xml:base="http://example.org/">
+  <rdf:Description rdf:about="http://example.org/subject">
+    <ex:knows rdf:ID="stmt1" rdf:resource="http://example.org/object"/>
+  </rdf:Description>
+</rdf:RDF>

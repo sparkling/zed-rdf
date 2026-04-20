@@ -1,0 +1,11 @@
+# Adversary fixture: FM3-N3 — `=>` must emit a triple with log:implies as predicate
+# Hypothesis: `{ :s :p :o } => { :s :q :r } .` is syntactic sugar for a single
+#   triple whose predicate is log:implies. A parser that evaluates the rule,
+#   uses a different predicate IRI, or leaks inner triples to the default graph
+#   will diverge.
+# Expected outcome: accept-with-1-fact
+outcome: accept
+fact-count: 1
+predicate-value: <http://www.w3.org/2000/10/swap/log#implies>
+divergence-hypothesis: AcceptRejectSplit or PredicateMismatch or ExtraFactIn — parsers that reject `=>`, use a wrong predicate, or flatten formula triples
+spec-ref: W3C N3 Team Submission 2011-03-28 §6 — Implication operator (=>); §4 — Formulae

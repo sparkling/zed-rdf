@@ -34,6 +34,10 @@ workspace = true
 default = []
 shadow-ttl = ["rdf-turtle-shadow/shadow"]
 shadow-nt = ["rdf-ntriples-shadow/shadow"]
+# Phase B shadow features (ADR-0021 §4). Enabled by agents and CI when
+# the shadow crates have their `shadow` feature turned on.
+shadow-xml = ["rdf-xml-shadow/shadow"]
+shadow-jsonld = ["rdf-jsonld-shadow/shadow"]
 
 [dependencies]
 # Frozen trait surface from the verification-v1 sweep (ADR-0020 §1.4).
@@ -56,3 +60,11 @@ rdf-ntriples = { path = "../../crates/rdf-ntriples", version = "0.0.0" }
 # `shadow` feature (ADR-0019 §3). Must NOT read shadow memory / source.
 rdf-turtle-shadow = { path = "../../crates/syntax/rdf-turtle-shadow", version = "0.0.0", optional = true }
 rdf-ntriples-shadow = { path = "../../crates/syntax/rdf-ntriples-shadow", version = "0.0.0", optional = true }
+# Phase B parsers and shadows (ADR-0021 §3-4). Agents wire these into
+# parse_for_language once they have real implementations.
+rdf-xml = { path = "../../crates/rdf-xml", version = "0.0.0" }
+rdf-jsonld = { path = "../../crates/rdf-jsonld", version = "0.0.0" }
+rdf-trix = { path = "../../crates/rdf-trix", version = "0.0.0" }
+rdf-n3 = { path = "../../crates/rdf-n3", version = "0.0.0" }
+rdf-xml-shadow = { path = "../../crates/syntax/rdf-xml-shadow", version = "0.0.0", optional = true }
+rdf-jsonld-shadow = { path = "../../crates/syntax/rdf-jsonld-shadow", version = "0.0.0", optional = true }

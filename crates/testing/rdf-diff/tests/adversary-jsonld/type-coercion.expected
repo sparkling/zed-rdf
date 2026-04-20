@@ -1,0 +1,14 @@
+# Adversary fixture: FM2 — @type: @id coerces string value to IRI
+# Failure mode: implementations that treat the string value "ex:bob" as a
+#   plain literal when the term has @type: @id in its definition, rather than
+#   expanding it to the full IRI http://example.org/bob.
+# JSON-LD 1.1 §5.3.2 (Value Expansion): when a term's type mapping is @id,
+#   a string value is expanded as an IRI reference, not as a plain literal.
+# The object must be the IRI <http://example.org/bob>, not the literal "ex:bob".
+# spec-ref: W3C JSON-LD 1.1 §5.3.2 Value Expansion, §6.4 Expansion algorithm
+# divergence-hypothesis: ObjectMismatch — lax parsers emit literal "ex:bob";
+#   conformant parsers emit IRI <http://example.org/bob>.
+outcome: accept
+fact-count: 1
+ACCEPT
+<http://example.org/alice> <http://xmlns.com/foaf/0.1/knows> <http://example.org/bob> .

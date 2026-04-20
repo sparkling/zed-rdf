@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Adversary fixture: rdf:parseType="Literal"
+
+  RDF/XML spec §2.9 (rdf:parseType="Literal"):
+  When a property element carries rdf:parseType="Literal", its content
+  is NOT further parsed as RDF/XML. Instead, the raw XML infoset
+  (serialised back to a canonical XML string) is used as the *string
+  value* of an rdf:XMLLiteral typed literal. The datatype IRI is:
+
+    http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral
+
+  This fixture uses nested markup in the Literal content, including
+  an element from a different namespace. The critical edge cases are:
+
+    1. The nested XML is *not* interpreted as more RDF triples.
+    2. The resulting object is an rdf:XMLLiteral, not a plain string.
+    3. Namespace declarations on the property element are included in
+       the serialised infoset per the XML Literal spec (RDF/XML §3.2).
+
+  Divergence hypothesis: parsers that do not implement parseType="Literal"
+  will either reject the document or treat the content as nested node
+  elements, emitting incorrect triples. Parsers that strip namespace
+  declarations from the serialised infoset will produce a literal value
+  that differs from the canonical form expected by the XPath data model.
+
+  Spec-ref: https://www.w3.org/TR/rdf-syntax-grammar/#section-Syntax-parsetype-Literal
+  Production: parseTypeLiteralPropertyElt
+-->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/vocab#">
+  <rdf:Description rdf:about="http://example.org/doc/42">
+    <ex:markup rdf:parseType="Literal">
+      <b xmlns="http://www.w3.org/1999/xhtml">bold text</b>
+    </ex:markup>
+  </rdf:Description>
+</rdf:RDF>

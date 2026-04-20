@@ -1,0 +1,24 @@
+# Adversary fixture: FM2 — blank node as graph name
+# Hypothesis: the TriX spec §3 defines the first child of <graph> as a <uri>
+#   when the graph is named. Using <bnode> in that position is outside the
+#   spec; behaviour is implementation-defined. Three plausible outcomes:
+#
+#   (a) REJECT — strict parser enforces the schema; <bnode> in graph-name
+#       position is a fatal error.
+#   (b) ACCEPT-AS-BNODE-GRAPH — permissive parser treats <bnode>g1</bnode>
+#       as an anonymous graph whose name is a blank node, yielding 1 fact
+#       with graph = _:g1 (or a fresh blank node).
+#   (c) ACCEPT-AS-DEFAULT-GRAPH — lenient parser ignores the malformed graph
+#       name and places the triple in the default graph, yielding 1 fact
+#       with graph = None.
+#
+#   Any parser that diverges from the locally predicted outcome surfaces a
+#   real implementation-defined interpretation and must be documented.
+# Expected outcome: implementation-defined
+outcome: implementation-defined
+fact-count: 1
+divergence-hypothesis: AcceptRejectSplit or ObjectMismatch on graph field —
+  strict parsers reject; permissive parsers accept with graph = _:g1 or
+  graph = None depending on how they handle the bnode graph-name extension.
+spec-ref: TriX spec §3 (HPL-2004-56) — graph element structure: first child
+  must be <uri> for a named graph; no provision for <bnode> as graph name.

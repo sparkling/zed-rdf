@@ -1,0 +1,23 @@
+# Adversary fixture: FM4 — scoped context redefines term within node object
+# Failure mode: implementations that do not apply the scoped context attached
+#   to the "Person" type definition when expanding the "name" property of a
+#   Person node. A non-conformant parser will use the outer context's mapping
+#   (http://schema.org/name) for all nodes, including Person nodes.
+# JSON-LD 1.1 §4.1.2 (Type-scoped Contexts): when a node has a type that
+#   carries a @context, that context is applied to all properties of that node.
+#   Within the Person node, "name" remaps to http://xmlns.com/foaf/0.1/name.
+#   Outside the Person node (ex:doc), "name" still maps to http://schema.org/name.
+# Expected triples:
+#   <ex:doc>   schema:name   "Document Name"         (outer context)
+#   <ex:alice> rdf:type      schema:Person
+#   <ex:alice> foaf:name     "Alice"                 (Person-scoped context)
+# spec-ref: W3C JSON-LD 1.1 §4.1.2 Type-scoped Contexts, §6.1 IRI Expansion
+# divergence-hypothesis: ObjectMismatch — parsers that ignore type-scoped
+#   contexts emit <http://schema.org/name> for alice's name triple; conformant
+#   parsers emit <http://xmlns.com/foaf/0.1/name>.
+outcome: accept
+fact-count: 3
+ACCEPT
+<http://example.org/alice> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person> .
+<http://example.org/alice> <http://xmlns.com/foaf/0.1/name> "Alice" .
+<http://example.org/doc> <http://schema.org/name> "Document Name" .

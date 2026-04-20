@@ -1,0 +1,28 @@
+# Adversary fixture: FM1-N3 — @keywords a. activates bare `a` as rdf:type shorthand
+#
+# Hypothesis: The `@keywords` directive in N3 introduces a shorthand mode where
+# listed bare words become keywords. With `@keywords a.`, the bare token `a`
+# in predicate position must be interpreted as rdf:type, identical to its
+# meaning in Turtle. A parser that (a) ignores `@keywords` entirely, or
+# (b) only accepts the `@keywords` form as a prefix-redefinition, or
+# (c) treats bare `a` as a local name even after `@keywords a.`, will
+# either reject the file or produce an incorrect predicate IRI.
+#
+# N3 spec (W3C Team Submission 2011-03-28) §3.1:
+#   "@keywords" followed by a comma-separated list of bare names activates
+#   those names as keywords. Once `a` is in the keywords list, `a` in
+#   predicate position is syntactic sugar for `rdf:type`.
+#
+# Expected: parse succeeds; the two triples each use rdf:type as predicate.
+# Divergence signal: AcceptRejectSplit, or ObjectMismatch where the predicate
+# is treated as a local name rather than rdf:type.
+#
+# Spec: W3C N3 Team Submission §3.1 — @keywords directive.
+
+@keywords a .
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix ex:  <http://example.org/> .
+
+ex:Alice a ex:Person .
+ex:Bob   a ex:Agent  .

@@ -1,0 +1,14 @@
+# Adversary fixture: FM3 — <triple> element with wrong arity (4 children)
+# Hypothesis: the TriX spec §3 requires exactly 3 RDF-term children per
+#   <triple> element. This document supplies 4 children, which violates the
+#   schema. A conformant parser must reject the document. A lenient parser
+#   may silently discard the extra child or accept the first 3 terms,
+#   producing an AcceptRejectSplit divergence.
+# Expected outcome: reject
+outcome: reject
+fact-count: 0
+divergence-hypothesis: AcceptRejectSplit — a parser that takes only the first
+  three children and ignores extra ones will accept the document and produce
+  1 fact; a conformant parser rejects it as malformed.
+spec-ref: TriX spec §3 (HPL-2004-56) — "A triple element has exactly three
+  children, representing the subject, predicate, and object of the triple."

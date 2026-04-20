@@ -509,12 +509,19 @@ dependencies = [
 name = "rdf-diff"
 version = "0.0.0"
 dependencies = [
+ "oxjsonld",
+ "oxrdf",
+ "oxrdfxml",
  "rdf-iri",
  "rdf-iri-shadow",
+ "rdf-jsonld",
+ "rdf-jsonld-shadow",
  "rdf-ntriples",
  "rdf-ntriples-shadow",
  "rdf-turtle",
  "rdf-turtle-shadow",
+ "rdf-xml",
+ "rdf-xml-shadow",
  "sparql-syntax",
  "sparql-syntax-shadow",
  "thiserror",
@@ -563,6 +570,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "rdf-jsonld"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-iri",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "rdf-jsonld-shadow"
+version = "0.0.0"
+dependencies = [
+ "rdf-diff",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "rdf-n3"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-iri",
+ "rdf-turtle",
+ "thiserror",
+]
+
+[[package]]
 name = "rdf-ntriples"
 version = "0.0.0"
 dependencies = [
@@ -579,6 +619,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rdf-trix"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "quick-xml",
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-iri",
+ "thiserror",
+]
+
+[[package]]
 name = "rdf-turtle"
 version = "0.0.0"
 dependencies = [
@@ -591,6 +643,27 @@ dependencies = [
 name = "rdf-turtle-shadow"
 version = "0.0.0"
 dependencies = [
+ "rdf-diff",
+ "thiserror",
+]
+
+[[package]]
+name = "rdf-xml"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "quick-xml",
+ "rdf-diagnostics",
+ "rdf-diff",
+ "rdf-iri",
+ "thiserror",
+]
+
+[[package]]
+name = "rdf-xml-shadow"
+version = "0.0.0"
+dependencies = [
+ "quick-xml",
  "rdf-diff",
  "thiserror",
 ]
@@ -963,10 +1036,16 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "rdf-diff",
+ "rdf-jsonld",
+ "rdf-jsonld-shadow",
+ "rdf-n3",
  "rdf-ntriples",
  "rdf-ntriples-shadow",
+ "rdf-trix",
  "rdf-turtle",
  "rdf-turtle-shadow",
+ "rdf-xml",
+ "rdf-xml-shadow",
 ]
 
 [[package]]

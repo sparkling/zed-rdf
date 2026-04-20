@@ -1,0 +1,2 @@
+ACCEPT
+<http://example.org/doc/42> <http://example.org/vocab#markup> "\n      <b xmlns=\"http://www.w3.org/1999/xhtml\">bold text</b>\n    "^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral> .

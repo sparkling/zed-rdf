@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adversary fixture: FM2 — blank node as graph name
+     Hypothesis: the TriX spec (§3) states that a graph name is a <uri> child
+     of <graph>. Using <bnode> in the graph-name position is not defined by the
+     spec; implementations may (a) reject the document, (b) accept it and treat
+     the blank node as an anonymous graph name, or (c) accept it and discard the
+     blank-node label. This fixture documents implementation-defined behaviour.
+     The blank-node label "g1" is used so that divergence between parsers that
+     preserve the label versus those that generate a fresh node is observable.
+     Expected outcome: implementation-defined (document predicted behaviour)
+     Spec-ref: TriX spec §3 — graph element structure requires <uri> as first child
+-->
+<TriX xmlns="http://www.w3.org/2004/03/trix/trix-1/">
+  <graph>
+    <bnode>g1</bnode>
+    <triple>
+      <uri>http://example.org/subject</uri>
+      <uri>http://example.org/predicate</uri>
+      <plainLiteral>hello</plainLiteral>
+    </triple>
+  </graph>
+</TriX>

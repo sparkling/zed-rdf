@@ -1,0 +1,24 @@
+# Adversary fixture: FM3 — @container: @list produces rdf:first/rdf:rest chain
+# Failure mode: implementations that map a JSON array directly to multiple
+#   triples with the same predicate (N-ary property shortcut), rather than
+#   constructing the required rdf:List cons-cell chain.
+# JSON-LD 1.1 §8.2.2 (List to RDF Conversion): an array under a term with
+#   @container: @list must be serialised as a linked list using rdf:first,
+#   rdf:rest, and rdf:nil — NOT as repeated property assertions.
+# The fixture has two items so the chain is:
+#   _:b0 rdf:first <http://example.org/first> .
+#   _:b0 rdf:rest  _:b1 .
+#   _:b1 rdf:first <http://example.org/second> .
+#   _:b1 rdf:rest  rdf:nil .
+#   <http://example.org/subject> <http://example.org/items> _:b0 .
+# spec-ref: W3C JSON-LD 1.1 §8.2.2 List to RDF Conversion
+# divergence-hypothesis: FactCountMismatch — non-conformant parsers emit 2
+#   direct triples instead of 5 list-chain triples.
+outcome: accept
+fact-count: 5
+ACCEPT
+_:c0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/first> .
+_:c0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:c1 .
+_:c1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/second> .
+_:c1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .
+<http://example.org/subject> <http://example.org/items> _:c0 .

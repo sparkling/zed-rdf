@@ -1,0 +1,31 @@
+# Adversary fixture: FM2-N3 — Quoted formula `{ }` graph-scoping
+#
+# Hypothesis: In N3, a quoted formula `{ <s> <p> <o> }` introduces a formula
+# (named graph / cited graph) whose triples are NOT asserted in the default
+# graph — they are nested inside the formula and only become part of the
+# ambient graph when the formula itself is the object of an outer triple (or
+# used in a rule conclusion). A parser that "flattens" the quoted formula
+# and emits `<s> <p> <o>` into the default graph has misread the semantics.
+#
+# This fixture:
+#   1. Declares a formula value as the object of an outer triple.
+#   2. Verifies that the parser emits exactly ONE triple in the default graph
+#      (the outer triple whose object is the formula), not THREE.
+#   3. A parser that leaks the inner triples to the default graph would emit
+#      four triples (1 outer + 3 inner), producing an ObjectMismatch or
+#      extra-fact divergence against a conformant parser.
+#
+# N3 spec §4: A quoted formula `{ ... }` is a first-class node; the triples
+# within it are "cited" — they describe content of the formula, not the
+# ambient graph.
+#
+# Expected: parse succeeds; exactly 1 fact in the default graph.
+# Divergence signal: ExtraFactIn — parsers that flatten quoted formulas emit
+# 4 facts instead of 1.
+#
+# Spec: W3C N3 Team Submission 2011-03-28 §4 — Formulae.
+
+@prefix ex:  <http://example.org/> .
+@prefix log: <http://www.w3.org/2000/10/swap/log#> .
+
+ex:doc log:content { ex:Alice ex:knows ex:Bob . ex:Bob ex:name "Bob" . ex:Alice ex:age 30 . } .

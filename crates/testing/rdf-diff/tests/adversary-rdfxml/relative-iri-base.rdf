@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Adversary fixture: relative IRI resolution against xml:base
+
+  RDF/XML spec §2.14 (URI References) and §2.15 (xml:base):
+  rdf:about, rdf:resource, and rdf:ID values that are relative IRI
+  references MUST be resolved against the in-scope base URI established
+  by xml:base or the document retrieval URI.
+
+  This fixture sets xml:base on the rdf:RDF element and uses relative
+  references in rdf:about and rdf:resource positions. Correct parsing
+  requires resolving them to absolute IRIs per RFC 3986 §5.
+
+  Divergence hypothesis: parsers that ignore xml:base or treat relative
+  IRIs as opaque strings will produce un-resolved relative IRIs in the
+  fact set, diverging from oracles that resolve against the base.
+  Parsers lacking any base-URI context for a relative IRI must either
+  error or reject; keeping the relative form is incorrect.
+
+  Spec-ref: https://www.w3.org/TR/rdf-syntax-grammar/#section-Syntax-ID-xml-base
+  Production: nodeElement, idAttr, aboutAttr, resourceAttr
+-->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/vocab#"
+         xml:base="http://example.org/base/">
+  <rdf:Description rdf:about="subject">
+    <ex:related rdf:resource="object"/>
+    <ex:label>A relative-IRI document</ex:label>
+  </rdf:Description>
+</rdf:RDF>
