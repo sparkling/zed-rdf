@@ -84,6 +84,10 @@ members = [
     # Phase E vocabulary crate (ADR-0024 §1). Stub lands in pre-flight;
     # agent `pe-rdf-vocab` fills the 11 vocabulary modules.
     "crates/rdf-vocab",
+    # Phase F LSP binary (ADR-0025 §1). Stub lands in pre-flight;
+    # agents `pf-lsp-protocol`, `pf-lsp-features`, and `pf-tester`
+    # fill the implementation.
+    "crates/rdf-lsp",
 ]
 
 [workspace.package]

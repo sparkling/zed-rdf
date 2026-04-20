@@ -1,6 +1,6 @@
 # ADR-0004: Third-party crate policy ("no forking" interpretation)
 
-- **Status:** Accepted (2026-04-18, amended 2026-04-19)
+- **Status:** Accepted (2026-04-18, amended 2026-04-19, amended 2026-04-20)
 - **Date:** 2026-04-18
 - **Deciders:** Henrik Pettersen
 - **Supersedes:** —
@@ -18,6 +18,12 @@
     `winnow`" row to "hand-roll default; combinator admission
     reopens per ADR-0007 §Reopen triggers." Row text amended in
     §Allow-list (v1) below.
+  - Patch 2026-04-20 (Phase F pre-flight): adds `lsp-server` and
+    `lsp-types` to the allow-list. `lsp-server` is rust-analyzer's
+    sync message-loop library (chosen over `tower-lsp`/`async-lsp`
+    per ADR-0025 §Pre-flight decision). `lsp-types` provides the
+    canonical LSP 3.17 type surface. Neither crate has RDF/SPARQL
+    semantics.
 - **Tags:** `policy`, `dependencies`, `supply-chain`
 
 ## Context and Problem Statement
@@ -65,7 +71,9 @@ role.**
 
 | Crate                           | Role                                              | Why we don't reimplement        | Fallback                          |
 |---------------------------------|---------------------------------------------------|---------------------------------|-----------------------------------|
-| `tower-lsp` (or `async-lsp`, TBD via ADR-0011) | LSP framework                 | Large boilerplate to replicate  | Hand-rolled LSP glue              |
+| `lsp-server`                    | LSP framework (rust-analyzer's sync message loop) | Battle-tested; avoids async complexity for v1 | Hand-rolled JSON-RPC over stdio |
+| `lsp-types`                     | LSP protocol type definitions                     | Canonical type surface for LSP 3.17; regenerating is impractical | Inline structs |
+| `tower-lsp` (or `async-lsp`, TBD via ADR-0011) | LSP framework (async alternative; deferred) | Large boilerplate to replicate | Hand-rolled LSP glue            |
 | `tokio`                         | Async runtime for LSP                             | Standard                        | Blocking stdlib loop              |
 | `tree-sitter` (ext. consumer)   | Zed embeds it — we only write `.scm` queries      | n/a                             | n/a                               |
 | — (deferred to ADR-0007; resolved 2026-04-20: hand-roll default; combinator admission reopens per ADR-0007 §Reopen triggers) | n/a | Phase A + Phase B formats ship hand-rolled; see ADR-0007 | Hand-written recursive descent |

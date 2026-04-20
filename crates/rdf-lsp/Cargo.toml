@@ -1,0 +1,41 @@
+[package]
+name = "rdf-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+description = "RDF/SPARQL/ShEx/Datalog Language Server Protocol implementation (ADR-0017 §4 Phase F)."
+
+[[bin]]
+name = "rdf-lsp"
+path = "src/main.rs"
+
+[lib]
+name = "rdf_lsp"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+lsp-server = "0.7"
+lsp-types = "0.95"
+serde_json = { workspace = true }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
+rdf-vocab = { path = "../rdf-vocab", version = "0.0.0" }
+rdf-ntriples = { path = "../rdf-ntriples", version = "0.0.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }
+rdf-xml = { path = "../rdf-xml", version = "0.0.0" }
+rdf-jsonld = { path = "../rdf-jsonld", version = "0.0.0" }
+rdf-trix = { path = "../rdf-trix", version = "0.0.0" }
+rdf-n3 = { path = "../rdf-n3", version = "0.0.0" }
+sparql-syntax = { path = "../sparql-syntax", version = "0.0.0" }
+shex-syntax = { path = "../shex-syntax", version = "0.0.0" }
+datalog-syntax = { path = "../datalog-syntax", version = "0.0.0" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

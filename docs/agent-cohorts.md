@@ -182,6 +182,19 @@ and agent IDs differ.
 | `pe-formatters` | `coder` | cohort-a | claude-opus-4-7 | Turtle + N-Triples + N-Quads formatters. |
 | `pe-tester` | `tester` | cohort-a | claude-opus-4-7 | Snapshot + idempotency tests. |
 
+## Phase F agents (ADR-0025)
+
+**Audit window:** from `phase-f/start` to `phase-f/done`.
+
+### Phase F — Cohort A (`phase-f`)
+
+| Agent id | RuFlo role | Lineage | Base model | Notes |
+|----------|-----------|---------|-----------|-------|
+| `pf-architect` | `architecture` | cohort-a | claude-opus-4-7 | LSP server structure; handler dispatch table; feature-service interface definitions; R-6 decoupling pattern. Writes spec to `docs/sparc/02-pseudocode.md` §9. |
+| `pf-lsp-protocol` | `backend-dev` | cohort-a | claude-opus-4-7 | LSP server binary: initialisation handshake, didOpen, didChange, publishDiagnostics; connection lifecycle; dispatcher wiring. |
+| `pf-lsp-features` | `backend-dev` | cohort-a | claude-opus-4-7 | Feature service implementations: hover, completion, goto-definition, documentSymbol, formatting; all 11 languages dispatched correctly. |
+| `pf-tester` | `tester` | cohort-a | claude-opus-4-7 | LSP integration harness (stdin/stdout JSON-RPC); happy-path tests for initialisation, didOpen/diagnostics, didChange. |
+
 ## Audit log
 
 - 2026-04-19 — registry frozen during ADR-0020 pre-flight. Cohort A
@@ -196,3 +209,4 @@ and agent IDs differ.
 - 2026-04-20 — Phase C cohort rows appended. 3 cohort-A agents. sparql-syntax implementation pre-existing; Phase C work is test wiring + W3C conformance. — Orchestrator, session session-1776716816155.
 - 2026-04-20 — Phase D cohort rows appended. 4 cohort-A agents. — Orchestrator, session session-1776716816155.
 - 2026-04-20 — Phase E cohort rows appended. 4 cohort-A agents. — Orchestrator, session session-1776716816155.
+- 2026-04-20 — Phase F cohort rows appended. 4 cohort-A agents. `lsp-server` and `lsp-types` added to ADR-0004 allow-list. `crates/rdf-lsp` stub created and added to workspace. — Orchestrator, session phase-f-preflight.
