@@ -15,9 +15,9 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
-rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
-rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.1.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.1.0" }
 quick-xml = { workspace = true }
 thiserror = { workspace = true }
 

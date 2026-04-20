@@ -231,6 +231,13 @@ Note: `zed: install dev extension` smoke test deferred — can only be verified 
 Exit gate met: extension scaffold complete, CI job authored, clippy/deny clean on workspace.
 Wall-clock: ~1 session. Tagged `phase-h/done`.
 
+## Phase I retro (2026-04-20)
+
+ADR-0028 executed in-session (orchestrator implemented all publish/harden items directly).
+Version bump: workspace `version = "0.0.0"` → `"0.1.0"` across all 18 crates; all intra-workspace path deps updated to `version = "0.1.0"`. `CHANGELOG.md` written covering all phases A–I, performance table, and verification sweep. Per-parser examples: `crates/rdf-turtle/examples/parse_turtle.rs`, `crates/sparql-syntax/examples/parse_sparql.rs`, `crates/rdf-vocab/examples/vocab_lookup.rs`. Per-crate fuzz targets (cargo-fuzz pattern, `[workspace]` isolation): `rdf-xml/fuzz/` (parse_rdfxml), `sparql-syntax/fuzz/` (parse_sparql), `shex-syntax/fuzz/` (parse_shex), `datalog-syntax/fuzz/` (parse_datalog). CI matrix extended: `fuzz-smoke.yml` and `fuzz-nightly.yml` updated to cover all new targets plus the rdf-xml target; path trigger list extended to include the four new crates.
+Exit gate met: all fuzz harnesses syntactically correct; CI matrix covers 12 targets total (3 rdf-iri + 2 rdf-ntriples + 3 rdf-turtle + 1 rdf-xml + 1 sparql-syntax + 1 shex-syntax + 1 datalog-syntax); `cargo test --workspace` 0 failures; clippy clean; deny check ok.
+Wall-clock: ~1 session. Tagged `phase-i/done` and `v0.1.0`.
+
 ## 7. Budget overrun policy
 
 If a phase exceeds its estimate by > 50 %:

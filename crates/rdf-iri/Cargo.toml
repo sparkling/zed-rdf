@@ -15,7 +15,7 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
 thiserror = { workspace = true }
 # RFC 3490 / UTS 46 `ToASCII` for RFC 3987 §3.1 host mapping. Admitted
 # to the runtime allow-list by ADR-0004's runtime IETF-RFC carve-out

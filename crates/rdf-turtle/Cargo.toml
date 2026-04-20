@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 # Frozen trait surface — the integration contract (ADR-0020 §1.4).
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
 thiserror = { workspace = true }
 
 # Property tests (ADR-0004 / ADR-0006 §Layers-2). Kept dev-only: the main

@@ -33,7 +33,7 @@ workspace = true
 # Normal dependency on the frozen trait surface only. Per ADR-0019 §1,
 # **no** ox*/sophia_* crate may appear here. `cargo tree -e normal` must
 # show zero oracle crates.
-rdf-diff = { path = "../rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../rdf-diff", version = "0.1.0" }
 
 # -----------------------------------------------------------------------------
 # Oracle crates — strictly `[dev-dependencies]` per ADR-0019 §1.

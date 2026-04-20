@@ -7,7 +7,7 @@
 
 [package]
 name = "rdf-iri-fuzz"
-version = "0.0.0"
+version = "0.1.0"
 publish = false
 edition = "2024"
 # cargo-fuzz requires this marker so it does not treat the harness itself

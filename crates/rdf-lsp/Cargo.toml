@@ -23,20 +23,20 @@ workspace = true
 lsp-server = "0.7"
 lsp-types = "0.95"
 serde_json = { workspace = true }
-rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
-rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
-rdf-vocab = { path = "../rdf-vocab", version = "0.0.0" }
-rdf-ntriples = { path = "../rdf-ntriples", version = "0.0.0" }
-rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }
-rdf-format = { path = "../rdf-format", version = "0.0.0" }
-rdf-xml = { path = "../rdf-xml", version = "0.0.0" }
-rdf-jsonld = { path = "../rdf-jsonld", version = "0.0.0" }
-rdf-trix = { path = "../rdf-trix", version = "0.0.0" }
-rdf-n3 = { path = "../rdf-n3", version = "0.0.0" }
-sparql-syntax = { path = "../sparql-syntax", version = "0.0.0" }
-shex-syntax = { path = "../shex-syntax", version = "0.0.0" }
-datalog-syntax = { path = "../datalog-syntax", version = "0.0.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.1.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.1.0" }
+rdf-vocab = { path = "../rdf-vocab", version = "0.1.0" }
+rdf-ntriples = { path = "../rdf-ntriples", version = "0.1.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.1.0" }
+rdf-format = { path = "../rdf-format", version = "0.1.0" }
+rdf-xml = { path = "../rdf-xml", version = "0.1.0" }
+rdf-jsonld = { path = "../rdf-jsonld", version = "0.1.0" }
+rdf-trix = { path = "../rdf-trix", version = "0.1.0" }
+rdf-n3 = { path = "../rdf-n3", version = "0.1.0" }
+sparql-syntax = { path = "../sparql-syntax", version = "0.1.0" }
+shex-syntax = { path = "../shex-syntax", version = "0.1.0" }
+datalog-syntax = { path = "../datalog-syntax", version = "0.1.0" }
 thiserror = { workspace = true }
 
 [[bench]]

@@ -45,28 +45,28 @@ shadow-jsonld = ["rdf-jsonld-shadow/shadow"]
 # through a single `rdf_diff::Parser` handle and feed the result into
 # `rdf_diff::diff_many`. Belt-and-braces ADR-0019 §1: `rdf-diff` itself
 # has zero oracle crates in its normal graph.
-rdf-diff = { path = "../../crates/testing/rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../../crates/testing/rdf-diff", version = "0.1.0" }
 
 # Main parsers — used both to parse W3C Manifest files (which are Turtle
 # themselves) and as the primary side of the diff. Loaded strictly via
 # the frozen `rdf_diff::Parser` trait so xtask stays decoupled from any
 # parser-internal state.
-rdf-turtle = { path = "../../crates/rdf-turtle", version = "0.0.0" }
-rdf-ntriples = { path = "../../crates/rdf-ntriples", version = "0.0.0" }
+rdf-turtle = { path = "../../crates/rdf-turtle", version = "0.1.0" }
+rdf-ntriples = { path = "../../crates/rdf-ntriples", version = "0.1.0" }
 
 # Shadow parsers — optional second-implementation side of the diff.
 # Gated behind feature flags so a main-parser build never pulls them;
 # the shadow crates themselves gate their contents behind their own
 # `shadow` feature (ADR-0019 §3). Must NOT read shadow memory / source.
-rdf-turtle-shadow = { path = "../../crates/syntax/rdf-turtle-shadow", version = "0.0.0", optional = true }
-rdf-ntriples-shadow = { path = "../../crates/syntax/rdf-ntriples-shadow", version = "0.0.0", optional = true }
+rdf-turtle-shadow = { path = "../../crates/syntax/rdf-turtle-shadow", version = "0.1.0", optional = true }
+rdf-ntriples-shadow = { path = "../../crates/syntax/rdf-ntriples-shadow", version = "0.1.0", optional = true }
 # Phase B parsers and shadows (ADR-0021 §3-4). Agents wire these into
 # parse_for_language once they have real implementations.
-rdf-xml = { path = "../../crates/rdf-xml", version = "0.0.0" }
-rdf-jsonld = { path = "../../crates/rdf-jsonld", version = "0.0.0" }
-rdf-trix = { path = "../../crates/rdf-trix", version = "0.0.0" }
-rdf-n3 = { path = "../../crates/rdf-n3", version = "0.0.0" }
+rdf-xml = { path = "../../crates/rdf-xml", version = "0.1.0" }
+rdf-jsonld = { path = "../../crates/rdf-jsonld", version = "0.1.0" }
+rdf-trix = { path = "../../crates/rdf-trix", version = "0.1.0" }
+rdf-n3 = { path = "../../crates/rdf-n3", version = "0.1.0" }
 # Phase C: SPARQL syntax parser (ADR-0022).
-sparql-syntax = { path = "../../crates/sparql-syntax", version = "0.0.0" }
-rdf-xml-shadow = { path = "../../crates/syntax/rdf-xml-shadow", version = "0.0.0", optional = true }
-rdf-jsonld-shadow = { path = "../../crates/syntax/rdf-jsonld-shadow", version = "0.0.0", optional = true }
+sparql-syntax = { path = "../../crates/sparql-syntax", version = "0.1.0" }
+rdf-xml-shadow = { path = "../../crates/syntax/rdf-xml-shadow", version = "0.1.0", optional = true }
+rdf-jsonld-shadow = { path = "../../crates/syntax/rdf-jsonld-shadow", version = "0.1.0", optional = true }

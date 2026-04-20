@@ -15,12 +15,12 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
-rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.1.0" }
 
 # Round-trip tests load the Phase-A main parsers to verify inverse-of-parser
 # behaviour. Kept strictly dev-only — the serialiser does not depend on a
 # parser at runtime.
 [dev-dependencies]
-rdf-ntriples = { path = "../rdf-ntriples", version = "0.0.0" }
-rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }
+rdf-ntriples = { path = "../rdf-ntriples", version = "0.1.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.1.0" }

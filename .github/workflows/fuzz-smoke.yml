@@ -24,6 +24,10 @@ on:
       - "crates/rdf-iri/**"
       - "crates/rdf-ntriples/**"
       - "crates/rdf-turtle/**"
+      - "crates/rdf-xml/**"
+      - "crates/sparql-syntax/**"
+      - "crates/shex-syntax/**"
+      - "crates/datalog-syntax/**"
       - "crates/testing/rdf-diff/**"
       - ".github/workflows/fuzz-smoke.yml"
   schedule:
@@ -71,6 +75,14 @@ jobs:
             target: parse_trig
           - crate: rdf-turtle
             target: bnode_scope_invariants
+          - crate: rdf-xml
+            target: parse_rdfxml
+          - crate: sparql-syntax
+            target: parse_sparql
+          - crate: shex-syntax
+            target: parse_shex
+          - crate: datalog-syntax
+            target: parse_datalog
 
     steps:
       - name: Checkout repository

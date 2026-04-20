@@ -16,13 +16,13 @@ workspace = true
 
 [dependencies]
 # Frozen trait surface — the integration contract (ADR-0020 §1.4).
-rdf-diff = { path = "../testing/rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../testing/rdf-diff", version = "0.1.0" }
 # Shared diagnostic-reporting infrastructure (ADR-0017 §4).
-rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.0.0" }
+rdf-diagnostics = { path = "../rdf-diagnostics", version = "0.1.0" }
 # RFC 3987 IRI validation at grammar boundaries (ADR-0017 Phase A).
-rdf-iri = { path = "../rdf-iri", version = "0.0.0" }
+rdf-iri = { path = "../rdf-iri", version = "0.1.0" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 # Used to parse W3C Turtle manifest files in integration tests.
-rdf-turtle = { path = "../rdf-turtle", version = "0.0.0" }
+rdf-turtle = { path = "../rdf-turtle", version = "0.1.0" }

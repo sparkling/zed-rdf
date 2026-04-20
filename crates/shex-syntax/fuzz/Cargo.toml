@@ -1,9 +1,9 @@
-# cargo-fuzz harness for the rdf-ntriples parser (N-Triples + N-Quads).
+# cargo-fuzz harness for the shex-syntax parser (ShEx 2.x compact syntax).
 # ADR-0018 §§3–4. Out-of-workspace by design — see the sibling
 # `rdf-iri/fuzz/Cargo.toml` for rationale.
 
 [package]
-name = "rdf-ntriples-fuzz"
+name = "shex-syntax-fuzz"
 version = "0.1.0"
 publish = false
 edition = "2024"
@@ -14,18 +14,12 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-rdf-ntriples = { path = ".." }
+shex-syntax = { path = ".." }
 rdf-diff = { path = "../../testing/rdf-diff" }
 
 [[bin]]
-name = "parse_ntriples"
-path = "fuzz_targets/parse_ntriples.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "parse_nquads"
-path = "fuzz_targets/parse_nquads.rs"
+name = "parse_shex"
+path = "fuzz_targets/parse_shex.rs"
 test = false
 doc = false
 

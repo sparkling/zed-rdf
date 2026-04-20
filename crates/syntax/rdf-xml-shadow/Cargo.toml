@@ -19,6 +19,6 @@ shadow = []
 workspace = true
 
 [dependencies]
-rdf-diff = { path = "../../testing/rdf-diff", version = "0.0.0" }
+rdf-diff = { path = "../../testing/rdf-diff", version = "0.1.0" }
 quick-xml = { workspace = true }
 thiserror = { workspace = true }

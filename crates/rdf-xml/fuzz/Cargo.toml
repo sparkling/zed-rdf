@@ -1,0 +1,22 @@
+[package]
+name = "rdf-xml-fuzz"
+version = "0.1.0"
+publish = false
+edition = "2024"
+autobins = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rdf-xml = { path = ".." }
+rdf-diff = { path = "../../testing/rdf-diff" }
+
+[[bin]]
+name = "parse_rdfxml"
+path = "fuzz_targets/parse_rdfxml.rs"
+test = false
+doc = false
+
+[workspace]

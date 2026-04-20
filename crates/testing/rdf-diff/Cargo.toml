@@ -38,23 +38,23 @@ thiserror = { workspace = true }
 # to drive fixture-level diffs. Kept strictly dev-only — the frozen trait
 # surface has no runtime edge onto the parser crates.
 [dev-dependencies]
-rdf-iri = { path = "../../rdf-iri", version = "0.0.0" }
-rdf-ntriples = { path = "../../rdf-ntriples", version = "0.0.0" }
-rdf-turtle = { path = "../../rdf-turtle", version = "0.0.0" }
-sparql-syntax = { path = "../../sparql-syntax", version = "0.0.0" }
+rdf-iri = { path = "../../rdf-iri", version = "0.1.0" }
+rdf-ntriples = { path = "../../rdf-ntriples", version = "0.1.0" }
+rdf-turtle = { path = "../../rdf-turtle", version = "0.1.0" }
+sparql-syntax = { path = "../../sparql-syntax", version = "0.1.0" }
 # Shadow parsers are loaded with their own `shadow` feature pre-enabled so the
 # adversary integration tests can compare main vs shadow behaviour on every
 # `cargo test -p rdf-diff` invocation (ADR-0019 §3, ADR-0020 §6.5).
-rdf-iri-shadow = { path = "../../syntax/rdf-iri-shadow", version = "0.0.0", features = ["shadow"] }
-rdf-ntriples-shadow = { path = "../../syntax/rdf-ntriples-shadow", version = "0.0.0", features = ["shadow"] }
-rdf-turtle-shadow = { path = "../../syntax/rdf-turtle-shadow", version = "0.0.0", features = ["shadow"] }
-sparql-syntax-shadow = { path = "../../syntax/sparql-syntax-shadow", version = "0.0.0", features = ["shadow"] }
+rdf-iri-shadow = { path = "../../syntax/rdf-iri-shadow", version = "0.1.0", features = ["shadow"] }
+rdf-ntriples-shadow = { path = "../../syntax/rdf-ntriples-shadow", version = "0.1.0", features = ["shadow"] }
+rdf-turtle-shadow = { path = "../../syntax/rdf-turtle-shadow", version = "0.1.0", features = ["shadow"] }
+sparql-syntax-shadow = { path = "../../syntax/sparql-syntax-shadow", version = "0.1.0", features = ["shadow"] }
 # Phase B main parsers (all now compile and implemented).
-rdf-jsonld = { path = "../../rdf-jsonld", version = "0.0.0" }
-rdf-xml = { path = "../../rdf-xml", version = "0.0.0" }
+rdf-jsonld = { path = "../../rdf-jsonld", version = "0.1.0" }
+rdf-xml = { path = "../../rdf-xml", version = "0.1.0" }
 # Phase B shadow parsers (all now compile and implemented).
-rdf-jsonld-shadow = { path = "../../syntax/rdf-jsonld-shadow", version = "0.0.0", features = ["shadow"] }
-rdf-xml-shadow = { path = "../../syntax/rdf-xml-shadow", version = "0.0.0", features = ["shadow"] }
+rdf-jsonld-shadow = { path = "../../syntax/rdf-jsonld-shadow", version = "0.1.0", features = ["shadow"] }
+rdf-xml-shadow = { path = "../../syntax/rdf-xml-shadow", version = "0.1.0", features = ["shadow"] }
 # Oracle adapters for Phase B: oxrdfxml and oxjsonld are always present as
 # dev-dependencies (they are test-only by definition) but their usage in
 # test bodies is gated behind the oracle-oxrdfxml / oracle-oxjsonld features
