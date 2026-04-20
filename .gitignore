@@ -43,3 +43,5 @@ crates/*/fuzz/Cargo.lock
 # Build artefacts
 /dist/
 /out/
+extensions/zed-rdf/.claude-flow/
+extensions/zed-rdf/target/

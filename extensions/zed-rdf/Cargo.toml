@@ -14,3 +14,8 @@ crate-type = ["cdylib"]
 # Pinned per ADR-0027 §pre-flight: zed_extension_api 0.2.x is the last
 # stable version before the 0.3 workspace-symbol breaking change.
 zed_extension_api = "0.2"
+
+# Keep this crate out of the outer Cargo workspace so it can build
+# independently for the wasm32-wasip2 target (Zed's dev-extension flow
+# invokes `cargo build --target wasm32-wasip2` from here).
+[workspace]

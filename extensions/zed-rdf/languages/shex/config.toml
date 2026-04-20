@@ -1,5 +1,4 @@
 name = "ShEx"
-grammar = "shex"
 path_suffixes = ["shex"]
 line_comments = ["# "]
 tab_size = 2
