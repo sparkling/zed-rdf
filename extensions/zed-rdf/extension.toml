@@ -1,7 +1,7 @@
-id = "zed-rdf"
+id = "rdf"
 name = "RDF / SPARQL / ShEx / Datalog"
 description = "Syntax highlighting and LSP support for RDF, SPARQL, ShEx, and Datalog."
-version = "0.1.0"
+version = "0.1.1"
 schema_version = 1
 authors = ["Henrik Pettersen <henrik@sparklingideas.co.uk>"]
 repository = "https://github.com/sparkling/zed-rdf"

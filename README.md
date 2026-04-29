@@ -265,7 +265,7 @@ The public Zed extension registry is at
 1. **Tag your release.** The `version` field in `extension.toml` must
    match the state at a specific commit SHA.
    ```bash
-   git tag -a v0.1.0 -m "zed-rdf v0.1.0"
+   git tag -a v0.1.1 -m "zed-rdf v0.1.1"
    git push origin v0.1.0
    ```
 
@@ -282,15 +282,15 @@ The public Zed extension registry is at
        https://github.com/<your-user>/zed-rdf.git \
        extensions/zed-rdf
    cd extensions/zed-rdf
-   git checkout v0.1.0     # exact commit matching extension.toml version
+   git checkout v0.1.1     # exact commit matching extension.toml version
    cd ../..
    ```
 
 4. **Add an entry to `extensions.toml`** (alphabetically sorted):
    ```toml
-   [zed-rdf]
-   submodule = "extensions/zed-rdf"
-   version = "0.1.0"
+   [rdf]
+   submodule = "extensions/rdf"
+   version = "0.1.1"
    path = "extensions/zed-rdf"    # subdir inside the submodule
    ```
    The `path` key is critical — this is a monorepo; the extension lives

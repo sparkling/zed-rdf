@@ -4,6 +4,31 @@ All notable changes to the `zed-rdf` workspace will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-04-29
+
+### Changed — Zed extension registry
+
+- Renamed extension `id` from `zed-rdf` to `rdf`. The Zed extensions registry
+  forbids `zed`, `Zed`, and `extension` in extension IDs and names; `rdf` is
+  the idiomatic registry name for the language family (cf. existing `[turtle]`,
+  `[python]`, etc.). The repo name `zed-rdf` is unchanged.
+
+### Fixed — Zed extension
+
+- Real grammar pins + extension workspace isolation (f14cb8b).
+- `extension.toml` cleanup, highlights tweaks, offline `extension.toml`
+  validator (b8c07f4).
+- Drop aliased `ntriples` grammar — Zed installs grammars by exported symbol
+  name, so `[grammars.ntriples]` aliasing `tree-sitter-turtle` failed to
+  resolve. N-Triples now uses `grammar = "turtle"` directly (3ba4c1c).
+- Turtle bracket schema fix + validate `BracketPair` shape in offline
+  validator (4df9665).
+
+### Added — Tooling
+
+- Ignore Zed dev-extension build artefacts under `extensions/zed-rdf/target/`
+  and `extensions/zed-rdf/extension.wasm` (14bb1b6).
+
 ## [0.1.0] — 2026-04-20
 
 Initial release. All phases A–I complete.
